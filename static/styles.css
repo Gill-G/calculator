@@ -1,14 +1,80 @@
-:root {
+/* Every colour lives in a token so a theme swap is just a token swap.
+   The default (no data-theme attribute yet) matches the dark theme, which
+   keeps the page from flashing before the inline script in index.html runs. */
+:root,
+[data-theme="dark"] {
   --bg: #10131a;
+  --glow: #1b2130;
   --panel: #191d27;
   --panel-raised: #232936;
   --key: #2a3140;
   --key-hover: #343d4f;
   --accent: #4c8dff;
   --accent-hover: #6ba0ff;
+  --on-accent: #0d1017;
   --muted: #8b94a7;
   --text: #eef1f6;
   --danger: #ff6b6b;
+  --border: rgba(255, 255, 255, 0.06);
+  --overlay: rgba(255, 255, 255, 0.06);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  --radius: 14px;
+}
+
+[data-theme="light"] {
+  --bg: #e9edf4;
+  --glow: #ffffff;
+  --panel: #ffffff;
+  --panel-raised: #f1f4f9;
+  --key: #e8ecf3;
+  --key-hover: #dae0ea;
+  --accent: #2f6fed;
+  --accent-hover: #1d5bd6;
+  --on-accent: #ffffff;
+  --muted: #6b7488;
+  --text: #161a22;
+  --danger: #cf3b3b;
+  --border: rgba(16, 20, 30, 0.08);
+  --overlay: rgba(16, 20, 30, 0.05);
+  --shadow: 0 18px 44px rgba(31, 41, 61, 0.14);
+  --radius: 14px;
+}
+
+[data-theme="midnight"] {
+  --bg: #0d0a18;
+  --glow: #1d1638;
+  --panel: #17122b;
+  --panel-raised: #201a3a;
+  --key: #292245;
+  --key-hover: #352d57;
+  --accent: #a78bfa;
+  --accent-hover: #bda4ff;
+  --on-accent: #14102a;
+  --muted: #9990ba;
+  --text: #f1edfb;
+  --danger: #ff7b9c;
+  --border: rgba(255, 255, 255, 0.07);
+  --overlay: rgba(255, 255, 255, 0.07);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --radius: 14px;
+}
+
+[data-theme="sunset"] {
+  --bg: #1a1113;
+  --glow: #2d1a1c;
+  --panel: #241819;
+  --panel-raised: #2f2023;
+  --key: #3a282a;
+  --key-hover: #4a3436;
+  --accent: #ff8a5b;
+  --accent-hover: #ffa176;
+  --on-accent: #23120a;
+  --muted: #ab918c;
+  --text: #f9efea;
+  --danger: #ff6b6b;
+  --border: rgba(255, 255, 255, 0.07);
+  --overlay: rgba(255, 255, 255, 0.07);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   --radius: 14px;
 }
 
@@ -23,7 +89,8 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: radial-gradient(circle at 30% 0%, #1b2130 0%, var(--bg) 60%);
+  background: radial-gradient(circle at 30% 0%, var(--glow) 0%, var(--bg) 60%);
+  transition: background 0.25s ease, color 0.25s ease;
   color: var(--text);
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Helvetica, Arial, sans-serif;
@@ -41,9 +108,9 @@ body {
   width: 340px;
   padding: 20px;
   background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
   border-radius: 24px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow);
 }
 
 .display {
@@ -122,7 +189,7 @@ body {
 }
 
 .key--fn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay);
 }
 
 .key--op {
@@ -131,7 +198,7 @@ body {
 
 .key--equals {
   background: var(--accent);
-  color: #0d1017;
+  color: var(--on-accent);
   font-weight: 700;
 }
 
@@ -149,9 +216,9 @@ body {
   width: 260px;
   padding: 20px;
   background: var(--panel);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
   border-radius: 24px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow);
 }
 
 .history__head {
@@ -235,4 +302,47 @@ body {
   font-size: 11px;
   color: var(--muted);
   text-align: center;
+}
+
+.themebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.themebar__label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.themebar__options {
+  display: flex;
+  gap: 8px;
+}
+
+.swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.12);
+}
+
+.swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.swatch[aria-pressed="true"] {
+  border-color: var(--accent);
 }

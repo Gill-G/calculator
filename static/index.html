@@ -4,6 +4,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Calculator</title>
+    <script>
+      // Runs before first paint so a saved light theme doesn't flash dark.
+      (function () {
+        try {
+          var saved = localStorage.getItem("calculator-theme");
+          if (saved) {
+            document.documentElement.setAttribute("data-theme", saved);
+            return;
+          }
+        } catch (e) {}
+        try {
+          if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+            document.documentElement.setAttribute("data-theme", "light");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>

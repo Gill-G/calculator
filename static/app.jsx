@@ -12,6 +12,32 @@ const TO_PYTHON = {
 
 const OPERATORS = ["+", "−", "×", "÷", "%", "^"];
 
+const STORAGE_KEY = "calculator-theme";
+
+// `preview` drives the swatch: half page-background, half accent.
+const THEMES = [
+  { id: "dark", label: "Dark", preview: ["#10131a", "#4c8dff"] },
+  { id: "light", label: "Light", preview: ["#e9edf4", "#2f6fed"] },
+  { id: "midnight", label: "Midnight", preview: ["#0d0a18", "#a78bfa"] },
+  { id: "sunset", label: "Sunset", preview: ["#1a1113", "#ff8a5b"] },
+];
+
+function readStoredTheme() {
+  // localStorage throws outright in some privacy modes, so never trust it.
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (THEMES.some((theme) => theme.id === saved)) return saved;
+  } catch (err) {
+    /* fall through to the system preference */
+  }
+  try {
+    if (window.matchMedia("(prefers-color-scheme: light)").matches) return "light";
+  } catch (err) {
+    /* fall through to the default */
+  }
+  return "dark";
+}
+
 const KEYS = [
   { label: "(", type: "fn" },
   { label: ")", type: "fn" },
@@ -59,6 +85,29 @@ function toPython(display) {
     .split("")
     .map((ch) => TO_PYTHON[ch] || ch)
     .join("");
+}
+
+function ThemeBar({ theme, onChange }) {
+  return (
+    <div className="themebar">
+      <span className="themebar__label">Theme</span>
+      <div className="themebar__options">
+        {THEMES.map((option) => (
+          <button
+            key={option.id}
+            className="swatch"
+            style={{
+              background: `linear-gradient(135deg, ${option.preview[0]} 50%, ${option.preview[1]} 50%)`,
+            }}
+            onClick={() => onChange(option.id)}
+            aria-pressed={theme === option.id}
+            aria-label={`${option.label} theme`}
+            title={option.label}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Display({ expression, hint, error, pending }) {
@@ -118,6 +167,16 @@ function Calculator() {
   const [settled, setSettled] = useState(false); // showing a finished result
   const [history, setHistory] = useState([]);
   const nextId = useRef(1);
+  const [theme, setTheme] = useState(readStoredTheme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem(STORAGE_KEY, theme);
+    } catch (err) {
+      /* the theme still applies for this session */
+    }
+  }, [theme]);
 
   const append = useCallback(
     (label) => {
@@ -235,6 +294,7 @@ function Calculator() {
   return (
     <div className="app">
       <main className="calculator">
+        <ThemeBar theme={theme} onChange={setTheme} />
         <Display
           expression={expression}
           hint={hint}

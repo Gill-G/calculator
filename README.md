@@ -50,5 +50,16 @@ and `Esc` to clear. `r` inserts `√` and `p` inserts `π`.
 
 Results land in the history panel — click any entry to reuse its value.
 
+## Themes
+
+Four themes ship with the app — **Dark**, **Light**, **Midnight**, and
+**Sunset** — picked from the swatches above the display. Your choice is saved
+in `localStorage`, and on a first visit the app follows your system's
+light/dark preference.
+
+Every colour is a CSS custom property in `static/styles.css`, so adding a
+theme means adding one `[data-theme="..."]` block of tokens and one entry to
+the `THEMES` array in `static/app.jsx`.
+
 Two notes on symbols: `%` is **modulo** (`7 % 3` is `1`), not "percent of",
 and `√` opens `sqrt(` so you close the parenthesis yourself.
