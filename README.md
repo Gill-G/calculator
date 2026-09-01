@@ -1,10 +1,17 @@
 # Calculator
 
-A small calculator app: a **React** frontend that hands every expression to a
-**Python** backend, which does the arithmetic and hands back the answer.
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![Node](https://img.shields.io/badge/Node-24_LTS-5FA04E?logo=nodedotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black)
+![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white)
 
-No build step and no dependencies — the whole thing runs on the Python standard
-library, and React arrives from a CDN.
+A small calculator app: a **React** frontend that hands every expression to a
+**Python** backend, which does the arithmetic and hands back the answer. A
+small **Node** service alongside it serves the fun facts.
+
+The frontend has no build step — React arrives from a CDN — and the Python
+side is standard library only. The only third-party packages anywhere are
+Express and cors, used by the facts service.
 
 ## Run it
 
