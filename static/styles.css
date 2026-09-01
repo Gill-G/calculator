@@ -1,0 +1,238 @@
+:root {
+  --bg: #10131a;
+  --panel: #191d27;
+  --panel-raised: #232936;
+  --key: #2a3140;
+  --key-hover: #343d4f;
+  --accent: #4c8dff;
+  --accent-hover: #6ba0ff;
+  --muted: #8b94a7;
+  --text: #eef1f6;
+  --danger: #ff6b6b;
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at 30% 0%, #1b2130 0%, var(--bg) 60%);
+  color: var(--text);
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+}
+
+.app {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.calculator {
+  width: 340px;
+  padding: 20px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.display {
+  background: var(--panel-raised);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+  text-align: right;
+  min-height: 104px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.display__hint {
+  font-size: 13px;
+  color: var(--muted);
+  min-height: 18px;
+  word-break: break-all;
+}
+
+.display__hint--error {
+  color: var(--danger);
+}
+
+.display__value {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  word-break: break-all;
+  line-height: 1.15;
+}
+
+.display__value--pending {
+  opacity: 0.55;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.key {
+  appearance: none;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--key);
+  color: var(--text);
+  font-size: 19px;
+  font-family: inherit;
+  font-weight: 500;
+  padding: 16px 0;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.06s ease;
+}
+
+.key:hover {
+  background: var(--key-hover);
+}
+
+.key:active {
+  transform: translateY(1px);
+}
+
+.key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.key--fn {
+  background: transparent;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.key--fn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.key--op {
+  color: var(--accent);
+}
+
+.key--equals {
+  background: var(--accent);
+  color: #0d1017;
+  font-weight: 700;
+}
+
+.key--equals:hover {
+  background: var(--accent-hover);
+}
+
+.key--equals:disabled {
+  background: var(--key);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.history {
+  width: 260px;
+  padding: 20px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.history__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.history__title {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.history__clear {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.history__clear:hover {
+  color: var(--text);
+}
+
+.history__empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.history__item {
+  width: 100%;
+  text-align: right;
+  background: var(--panel-raised);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.history__item:hover {
+  background: var(--key);
+}
+
+.history__expr {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.history__result {
+  display: block;
+  font-size: 17px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.footnote {
+  margin: 14px 2px 0;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
