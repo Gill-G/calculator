@@ -53,8 +53,9 @@ Results land in the history panel — click any entry to reuse its value.
 ## Themes
 
 Four themes ship with the app — **Dark**, **Light**, **Midnight**, and
-**Sunset** — picked from the swatches above the display. Your choice is saved
-in `localStorage`, and on a first visit the app follows your system's
+**Sunset**. The **Theme** button in the top-left corner opens a sidebar menu
+listing them by name; close it with the ×, the backdrop, or `Esc`. Your choice
+is saved in `localStorage`, and on a first visit the app follows your system's
 light/dark preference.
 
 Every colour is a CSS custom property in `static/styles.css`, so adding a

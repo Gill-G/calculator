@@ -87,26 +87,67 @@ function toPython(display) {
     .join("");
 }
 
-function ThemeBar({ theme, onChange }) {
+function ThemeTrigger({ current, open, onToggle }) {
   return (
-    <div className="themebar">
-      <span className="themebar__label">Theme</span>
-      <div className="themebar__options">
-        {THEMES.map((option) => (
+    <button
+      className="theme-trigger"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label="Theme menu"
+    >
+      <span
+        className="theme-trigger__dot"
+        style={{
+          background: `linear-gradient(135deg, ${current.preview[0]} 50%, ${current.preview[1]} 50%)`,
+        }}
+      />
+      Theme
+    </button>
+  );
+}
+
+function ThemeMenu({ theme, onChange, onClose }) {
+  return (
+    <React.Fragment>
+      <div className="backdrop" onClick={onClose} />
+      <aside className="drawer" role="dialog" aria-modal="true" aria-label="Theme">
+        <div className="drawer__head">
+          <h2 className="drawer__title">Theme</h2>
           <button
-            key={option.id}
-            className="swatch"
-            style={{
-              background: `linear-gradient(135deg, ${option.preview[0]} 50%, ${option.preview[1]} 50%)`,
-            }}
-            onClick={() => onChange(option.id)}
-            aria-pressed={theme === option.id}
-            aria-label={`${option.label} theme`}
-            title={option.label}
-          />
-        ))}
-      </div>
-    </div>
+            className="drawer__close"
+            onClick={onClose}
+            aria-label="Close theme menu"
+          >
+            ×
+          </button>
+        </div>
+        <ul className="drawer__list">
+          {THEMES.map((option) => (
+            <li key={option.id}>
+              <button
+                className="theme-option"
+                onClick={() => onChange(option.id)}
+                aria-pressed={theme === option.id}
+              >
+                <span
+                  className="theme-option__swatch"
+                  style={{
+                    background: `linear-gradient(135deg, ${option.preview[0]} 50%, ${option.preview[1]} 50%)`,
+                  }}
+                />
+                <span className="theme-option__name">{option.label}</span>
+                {theme === option.id && (
+                  <span className="theme-option__check" aria-hidden="true">
+                    ✓
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="drawer__note">The menu stays open so you can compare.</p>
+      </aside>
+    </React.Fragment>
   );
 }
 
@@ -168,6 +209,7 @@ function Calculator() {
   const [history, setHistory] = useState([]);
   const nextId = useRef(1);
   const [theme, setTheme] = useState(readStoredTheme);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -277,7 +319,11 @@ function Calculator() {
         backspace();
       } else if (key === "Escape") {
         event.preventDefault();
-        clear();
+        if (menuOpen) {
+          setMenuOpen(false);
+        } else {
+          clear();
+        }
       } else {
         const mapped = KEY_MAP[key] || key;
         if (KEYS.some((k) => k.label === mapped)) {
@@ -289,12 +335,23 @@ function Calculator() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [append, backspace, clear, evaluate]);
+  }, [append, backspace, clear, evaluate, menuOpen]);
 
   return (
     <div className="app">
+      <ThemeTrigger
+        current={THEMES.find((option) => option.id === theme) || THEMES[0]}
+        open={menuOpen}
+        onToggle={() => setMenuOpen((open) => !open)}
+      />
+      {menuOpen && (
+        <ThemeMenu
+          theme={theme}
+          onChange={setTheme}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
       <main className="calculator">
-        <ThemeBar theme={theme} onChange={setTheme} />
         <Display
           expression={expression}
           hint={hint}
