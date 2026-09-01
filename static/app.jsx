@@ -14,6 +14,10 @@ const OPERATORS = ["+", "−", "×", "÷", "%", "^"];
 
 const STORAGE_KEY = "calculator-theme";
 
+// The Node facts service runs beside the Python server, on its own port.
+// Derived from the current host so this still works over the network.
+const FACTS_URL = `${window.location.protocol}//${window.location.hostname}:3001/api/fact`;
+
 // `preview` drives the swatch: half page-background, half accent.
 const THEMES = [
   { id: "dark", label: "Dark", preview: ["#10131a", "#4c8dff"] },
@@ -200,6 +204,50 @@ function History({ entries, onPick, onClear }) {
   );
 }
 
+function FactBubble() {
+  const [fact, setFact] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const loadFact = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(FACTS_URL);
+      const data = await response.json();
+      setFact(data.fact);
+    } catch (err) {
+      setFact("Facts service offline — start it with `npm start`.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Runs once per page load, so refreshing gets you a new fact.
+  useEffect(() => {
+    loadFact();
+  }, [loadFact]);
+
+  return (
+    <section className="fact">
+      <div className="fact__head">
+        <h2 className="fact__title">Did you know?</h2>
+        <button
+          className="fact__new"
+          onClick={loadFact}
+          disabled={loading}
+          aria-label="Show another fact"
+          title="Another fact"
+        >
+          ↻
+        </button>
+      </div>
+      <p className={"fact__text" + (loading ? " fact__text--loading" : "")}>
+        {fact || "Loading a fact…"}
+      </p>
+      <p className="fact__source">Served by Node · new fact each refresh</p>
+    </section>
+  );
+}
+
 function Calculator() {
   const [expression, setExpression] = useState("");
   const [hint, setHint] = useState("");
@@ -351,6 +399,7 @@ function Calculator() {
           onClose={() => setMenuOpen(false)}
         />
       )}
+      <FactBubble />
       <main className="calculator">
         <Display
           expression={expression}

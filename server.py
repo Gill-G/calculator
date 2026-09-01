@@ -2,7 +2,8 @@
 """A tiny calculator backend built on the Python standard library.
 
 Serves the React frontend in static/ and evaluates arithmetic expressions
-posted to /api/calc. Expressions are parsed with `ast` and walked by hand --
+posted to /api/calc. Random facts come from the separate Node service in
+facts-server.js. Expressions are parsed with `ast` and walked by hand --
 `eval` is never used, so only the whitelisted operators below can run.
 
 Usage:

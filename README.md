@@ -8,16 +8,30 @@ library, and React arrives from a CDN.
 
 ## Run it
 
+Two processes: Python serves the app and does the arithmetic, Node serves the
+fun facts. `start.sh` runs both and stops both on Ctrl+C.
+
 ```bash
-python3 server.py            # then open http://127.0.0.1:8000
-python3 server.py --port 3000
+./start.sh                   # then open http://127.0.0.1:8000
 ```
+
+Or run them yourself in two terminals:
+
+```bash
+npm install && node facts-server.js   # facts, port 3001
+python3 server.py                     # app + maths, port 8000
+```
+
+The calculator works on its own if the Node service is down — only the facts
+bubble notices, and it says so.
 
 ## Layout
 
 | File | What it does |
 | --- | --- |
 | `server.py` | HTTP server, static file serving, and the expression evaluator |
+| `facts-server.js` | Express service serving random facts on port 3001 |
+| `start.sh` | Runs both servers together |
 | `static/index.html` | Page shell; pulls in React and Babel |
 | `static/app.jsx` | The React UI — display, keypad, history |
 | `static/styles.css` | Styling |
@@ -42,6 +56,26 @@ unary `+/-`, the constants `pi`/`e`/`tau`, and the functions `sqrt`, `abs`,
 list, a call to something unlisted — is rejected. Exponents are capped at
 ±1000 and expressions at 200 characters so one request can't wedge the server.
 
+## Fun facts
+
+The panel on the right of the page shows a random maths or science fact,
+served by the Node service (Express + cors) on port 3001:
+
+```bash
+curl http://127.0.0.1:3001/api/fact
+# {"fact": "A day on Venus lasts longer...", "index": 10, "total": 20}
+
+curl http://127.0.0.1:3001/api/facts   # all 20
+curl http://127.0.0.1:3001/health
+```
+
+It fetches once per page load, so a refresh gets you a new one — or click the
+↻ button to pull another without reloading. The facts live in the `FACTS`
+array in `facts-server.js`; add to it and restart the service.
+
+Because the page is served from port 8000 and the facts from 3001, the Node
+side enables CORS.
+
 ## Using it
 
 Click the keys or type. The keyboard accepts digits, `+ - * /` (and `x` for
@@ -64,3 +98,9 @@ the `THEMES` array in `static/app.jsx`.
 
 Two notes on symbols: `%` is **modulo** (`7 % 3` is `1`), not "percent of",
 and `√` opens `sqrt(` so you close the parenthesis yourself.
+
+## Node
+
+Node is not required to do arithmetic — only to serve facts. This project was
+developed against Node 24 LTS installed to `~/.local/node` (WSL's `npm` on
+`PATH` may be the Windows one from `/mnt/c`, which cannot run Linux builds).

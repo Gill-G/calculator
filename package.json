@@ -1,0 +1,25 @@
+{
+  "name": "calculator-facts",
+  "version": "1.0.0",
+  "description": "Random maths and science facts for the calculator app.",
+  "main": "facts-server.js",
+  "scripts": {
+    "start": "node facts-server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gill-G/calculator.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Gill-G/calculator/issues"
+  },
+  "homepage": "https://github.com/Gill-G/calculator#readme",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1"
+  }
+}
