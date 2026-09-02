@@ -9,7 +9,7 @@ A small calculator app: a **React** frontend that hands every expression to a
 **Python** backend, which does the arithmetic and hands back the answer. A
 small **Node** service alongside it serves the fun facts.
 
-Two modes so far — **Basic** and **Scientific** — picked from the switcher
+Two modes so far — **Standard** and **Scientific** — picked from the switcher
 above the display.
 
 The frontend has no build step — React arrives from a CDN — and the Python
@@ -119,7 +119,7 @@ Results land in the history panel — click any entry to reuse its value.
 The switcher above the display picks the keypad. Your choice is saved in
 `localStorage`, and the expression on screen survives a switch.
 
-**Basic** is the original four-function pad, plus `%`, `^`, `√` and brackets.
+**Standard** is the original four-function pad, plus `%`, `^`, `√` and brackets.
 
 **Scientific** keeps those digits and operators exactly where they were and
 stacks four rows of function keys on top: `sin` `cos` `tan` and their

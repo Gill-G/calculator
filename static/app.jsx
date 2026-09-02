@@ -58,7 +58,7 @@ function readStored(key, allowed, fallback) {
 
 // Each key inserts `insert` when present, otherwise its own label -- so the
 // button can read "sin⁻¹" while the expression gets the plain `asin(`.
-const BASIC_KEYS = [
+const STANDARD_KEYS = [
   { label: "(", type: "fn" },
   { label: ")", type: "fn" },
   { label: "^", type: "op" },
@@ -90,7 +90,7 @@ const BASIC_KEYS = [
   { label: "=", type: "equals", action: "evaluate" },
 ];
 
-// The same four columns as the basic pad, with four rows of function keys
+// The same four columns as the standard pad, with four rows of function keys
 // stacked on top, so the digits stay exactly where the hand expects them.
 const SCIENTIFIC_KEYS = [
   { label: "sin", type: "sci", insert: "sin(", aria: "Sine" },
@@ -146,7 +146,7 @@ const SCIENTIFIC_KEYS = [
 
 // Adding a mode means adding a row here and a keypad above it.
 const MODES = [
-  { id: "basic", label: "Basic", keys: BASIC_KEYS },
+  { id: "standard", label: "Standard", keys: STANDARD_KEYS },
   { id: "scientific", label: "Scientific", keys: SCIENTIFIC_KEYS, angles: true },
 ];
 
@@ -388,7 +388,7 @@ function Calculator() {
   const nextId = useRef(1);
   const [theme, setTheme] = useState(readStoredTheme);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mode, setMode] = useState(() => readStored(MODE_KEY, MODES, "basic"));
+  const [mode, setMode] = useState(() => readStored(MODE_KEY, MODES, "standard"));
   const [angle, setAngle] = useState(() => readStored(ANGLE_KEY, ANGLES, "deg"));
 
   const activeMode = MODES.find((option) => option.id === mode) || MODES[0];
