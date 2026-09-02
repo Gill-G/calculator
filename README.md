@@ -176,8 +176,8 @@ pointed at the same port keep their own.
 The answer is stored in decimal whatever mode produced it and spelled into
 the active base when shown, so it survives a switch: an answer of `9` in
 decimal is the same `A` in hex. An answer with no whole-number form — `0.25`,
-say — simply has no chip in programmer mode, and the next result brings it
-back.
+say — has no chip in programmer mode at all, in any base, since that mode
+could not use it; the next whole result brings it back.
 
 ## Modes
 

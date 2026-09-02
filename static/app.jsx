@@ -323,10 +323,14 @@ function groupDigits(text) {
 // canonical form is what keeps a mode or base switch from stranding an Ans
 // that means something else -- 255 and FF stay the same answer.
 //
-// null means there is no answer this mode can use: a float has no hex.
-function answerIn(answer, base, width) {
+// null means there is no answer this mode can use. `wholeOnly` is programmer
+// mode asking: it has no use for 0.25 in any base, decimal included, so the
+// chip stays away rather than offering an Ans the evaluator would reject.
+function answerIn(answer, base, width, wholeOnly) {
   if (!answer) return null;
-  if (base === "dec") return answer;
+  if (base === "dec") {
+    return !wholeOnly || /^-?\d+$/.test(answer) ? answer : null;
+  }
   const values = convertBases(answer, "dec", width);
   return values ? values[base] : null;
 }
@@ -635,7 +639,12 @@ function Calculator() {
   const radix = BASE_RADIX[base];
   // Standard and scientific work in plain decimal; only programmer varies.
   const activeBase = activeMode.bases ? base : "dec";
-  const answerValue = answerIn(answer, activeBase, Number(width));
+  const answerValue = answerIn(
+    answer,
+    activeBase,
+    Number(width),
+    Boolean(activeMode.bases)
+  );
 
   // Separators are added on the way to the screen and nowhere else, so the
   // expression the backend sees stays exactly what was typed. Hex, octal and
