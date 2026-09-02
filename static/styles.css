@@ -131,20 +131,29 @@ body {
 .display {
   background: var(--panel-raised);
   border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
   text-align: right;
-  min-height: 104px;
+  min-height: 88px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 4px;
+}
+
+/* The unit control on the left, the running expression on the right. */
+.display__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 20px;
 }
 
 .display__hint {
+  flex: 1;
   font-size: 13px;
   color: var(--muted);
-  min-height: 18px;
   word-break: break-all;
 }
 
@@ -164,28 +173,22 @@ body {
   opacity: 0.55;
 }
 
-/* Mode switcher: a segmented control, with the mode's unit control -- DEG/RAD
-   or the word size -- on the line below it, right-aligned. Three mode tabs
-   fill the card's width on their own. */
+/* Mode switcher: one segmented control, centred. The mode's unit control --
+   DEG/RAD or the word size -- rides in the display instead, which keeps the
+   card a row shorter than giving it a line of its own would. */
 .modes {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.modes__tabs,
-.units {
-  display: flex;
+  justify-content: center;
   gap: 4px;
   padding: 4px;
+  margin-bottom: 12px;
   background: var(--panel-raised);
   border-radius: 999px;
 }
 
-.modes__tabs {
-  align-self: center;
+.units {
+  display: flex;
+  gap: 2px;
 }
 
 .mode-tab,
@@ -195,23 +198,22 @@ body {
   background: transparent;
   color: var(--muted);
   font-family: inherit;
-  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  padding: 7px 14px;
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
 
 .mode-tab {
+  font-size: 13px;
   padding: 7px 12px;
 }
 
 .unit-tab {
-  padding: 7px 10px;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.06em;
+  padding: 3px 7px;
 }
 
 .mode-tab:hover,
@@ -235,11 +237,11 @@ body {
    that switches to it. Monospaced so the bit patterns line up. */
 .readout {
   list-style: none;
-  margin: -6px 0 16px;
-  padding: 8px;
+  margin: 0 0 12px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   background: var(--panel-raised);
   border-radius: var(--radius);
 }
@@ -249,7 +251,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 5px 7px;
+  padding: 3px 7px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -290,8 +292,8 @@ body {
   flex: 1;
   text-align: right;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 12.5px;
+  line-height: 1.4;
   word-break: break-all;
 }
 
@@ -301,16 +303,18 @@ body {
   gap: 10px;
 }
 
-/* Ten rows instead of six, so the keys give back some height. */
+/* Eight rows and ten rows instead of six, so these keypads give back the
+   height the extra rows cost -- the card has to fit a laptop without
+   scrolling. */
 .keypad--scientific,
 .keypad--programmer {
-  gap: 8px;
+  gap: 7px;
 }
 
 .keypad--scientific .key,
 .keypad--programmer .key {
-  padding: 13px 0;
-  font-size: 18px;
+  padding: 9px 0;
+  font-size: 17px;
 }
 
 .key {
@@ -510,7 +514,7 @@ body {
 }
 
 .footnote {
-  margin: 14px 2px 0;
+  margin: 10px 2px 0;
   font-size: 11px;
   color: var(--muted);
   text-align: center;
@@ -685,6 +689,61 @@ body {
   font-size: 11px;
   line-height: 1.5;
   color: var(--muted);
+}
+
+/* Short screens: a 768px-tall laptop leaves roughly 670px of viewport, which
+   the two taller keypads overrun. Spend the padding, the display's height and
+   the footnote on the rows rather than making the card scroll. */
+@media (max-height: 780px) {
+  body {
+    padding: 12px;
+  }
+
+  .modes {
+    margin-bottom: 10px;
+  }
+
+  .mode-tab {
+    padding: 6px 11px;
+  }
+
+  .display {
+    min-height: 74px;
+    margin-bottom: 10px;
+  }
+
+  .display__value {
+    font-size: 30px;
+  }
+
+  .readout {
+    margin-bottom: 10px;
+    padding: 5px;
+  }
+
+  .readout__row {
+    padding: 2px 6px;
+  }
+
+  .readout__value {
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+
+  .keypad--scientific,
+  .keypad--programmer {
+    gap: 5px;
+  }
+
+  .keypad--scientific .key,
+  .keypad--programmer .key {
+    padding: 7px 0;
+    font-size: 16px;
+  }
+
+  .footnote {
+    display: none;
+  }
 }
 
 @media (max-width: 720px) {

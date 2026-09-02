@@ -148,14 +148,17 @@ means four different things without it.
 ## Modes
 
 The switcher above the display picks the keypad. Your choice is saved in
-`localStorage`, and the expression on screen survives a switch.
+`localStorage`, and the expression on screen survives a switch. Each mode's
+unit control sits in the top-left of the display, where a pocket calculator
+puts the same indicator — which is also what keeps the tallest keypad on
+screen without scrolling on a laptop.
 
 **Standard** is the original four-function pad, plus `%`, `^`, `√` and brackets.
 
 **Scientific** keeps those digits and operators exactly where they were and
 stacks four rows of function keys on top: `sin` `cos` `tan` and their
 inverses, `ln` and `log`, `x²` `xʸ` `√` `n!`, `eˣ` `10ˣ` `1/x` `|x|`, plus
-`π`, `e` and `×10ˣ`. The **DEG**/**RAD** toggle under the switcher sets the
+`π`, `e` and `×10ˣ`. The **DEG**/**RAD** toggle in the display sets the
 unit for the trig keys — it is sent with the request, so the conversion
 happens in Python rather than in the expression.
 
@@ -172,7 +175,7 @@ numbers in that base — the display is re-spelled rather than rejected, so
 rather than moving, so `A`–`F` are live only in hex, `8` and `9` only from
 decimal up, and binary leaves just `0` and `1`. `AND` `OR` `XOR` `NOT` and
 `<<` `>>` enter `&` `|` `^` `~` `<<` `>>`, and the **8**/**16**/**32**/**64**
-toggle under the switcher sets how many bits a result keeps.
+toggle in the display sets how many bits a result keeps.
 
 Clear is labelled `AC` in this mode, because `C` is a hex digit.
 

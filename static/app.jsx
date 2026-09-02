@@ -373,40 +373,43 @@ function ThemeMenu({ theme, onChange, onClose }) {
   );
 }
 
-// `units` is whatever second control the active mode wants under the tabs:
-// DEG/RAD for scientific, the word size for programmer, nothing otherwise.
-function ModeSwitcher({ mode, onModeChange, units }) {
+function ModeSwitcher({ mode, onModeChange }) {
   return (
-    <div className="modes">
-      <div className="modes__tabs" role="tablist" aria-label="Calculator mode">
-        {MODES.map((option) => (
-          <button
-            key={option.id}
-            className="mode-tab"
-            role="tab"
-            aria-selected={mode === option.id}
-            aria-controls="keypad"
-            onClick={() => onModeChange(option.id)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-      {units && (
-        <div className="units" role="group" aria-label={units.label}>
-          {units.options.map((option) => (
-            <button
-              key={option.id}
-              className="unit-tab"
-              aria-pressed={units.value === option.id}
-              onClick={() => units.onChange(option.id)}
-              title={option.title}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="modes" role="tablist" aria-label="Calculator mode">
+      {MODES.map((option) => (
+        <button
+          key={option.id}
+          className="mode-tab"
+          role="tab"
+          aria-selected={mode === option.id}
+          aria-controls="keypad"
+          onClick={() => onModeChange(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Whatever second control the active mode wants: DEG/RAD for scientific, the
+// word size for programmer, nothing for standard. It rides on the display's
+// top line -- where a pocket calculator puts the same indicator, and where it
+// costs the card no height of its own.
+function UnitTabs({ units }) {
+  return (
+    <div className="units" role="group" aria-label={units.label}>
+      {units.options.map((option) => (
+        <button
+          key={option.id}
+          className="unit-tab"
+          aria-pressed={units.value === option.id}
+          onClick={() => units.onChange(option.id)}
+          title={option.title}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -439,12 +442,15 @@ function BaseReadout({ values, base, onBaseChange }) {
   );
 }
 
-function Display({ expression, hint, error, pending }) {
+function Display({ expression, hint, error, pending, units }) {
   const hintText = error || hint;
   return (
     <div className="display">
-      <div className={"display__hint" + (error ? " display__hint--error" : "")}>
-        {hintText}
+      <div className="display__top">
+        {units && <UnitTabs units={units} />}
+        <div className={"display__hint" + (error ? " display__hint--error" : "")}>
+          {hintText}
+        </div>
       </div>
       <div
         className={"display__value" + (pending ? " display__value--pending" : "")}
@@ -757,12 +763,13 @@ function Calculator() {
       )}
       <FactBubble />
       <main className="calculator">
-        <ModeSwitcher mode={mode} onModeChange={setMode} units={units} />
+        <ModeSwitcher mode={mode} onModeChange={setMode} />
         <Display
           expression={expression}
           hint={hint}
           error={error}
           pending={pending}
+          units={units}
         />
         {activeMode.bases && (
           <BaseReadout
