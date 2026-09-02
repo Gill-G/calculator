@@ -367,7 +367,7 @@ function balanceParens(display) {
 function ThemeTrigger({ current, open, onToggle }) {
   return (
     <button
-      className="theme-trigger"
+      className="trigger theme-trigger"
       onClick={onToggle}
       aria-expanded={open}
       aria-label="Theme menu"
@@ -383,22 +383,33 @@ function ThemeTrigger({ current, open, onToggle }) {
   );
 }
 
-function ThemeMenu({ theme, onChange, depth, onDepthChange, onClose }) {
+// The theme button's twin, sitting under it. Its chip is a miniature of what
+// the button does: flat when 3D is off, standing on a side face when it is on.
+function DepthTrigger({ depth, onToggle }) {
+  return (
+    <button
+      className="trigger depth-trigger"
+      onClick={onToggle}
+      aria-pressed={depth}
+      title={depth ? "Turn 3D off" : "Turn 3D on"}
+    >
+      <span className="depth-trigger__chip" aria-hidden="true" />
+      3D
+    </button>
+  );
+}
+
+function ThemeMenu({ theme, onChange, onClose }) {
   return (
     <React.Fragment>
       <div className="backdrop" onClick={onClose} />
-      <aside
-        className="drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Appearance"
-      >
+      <aside className="drawer" role="dialog" aria-modal="true" aria-label="Theme">
         <div className="drawer__head">
-          <h2 className="drawer__title">Appearance</h2>
+          <h2 className="drawer__title">Theme</h2>
           <button
             className="drawer__close"
             onClick={onClose}
-            aria-label="Close appearance menu"
+            aria-label="Close theme menu"
           >
             ×
           </button>
@@ -427,20 +438,6 @@ function ThemeMenu({ theme, onChange, depth, onDepthChange, onClose }) {
             </li>
           ))}
         </ul>
-        <button
-          className="switch"
-          role="switch"
-          aria-checked={depth}
-          onClick={() => onDepthChange(!depth)}
-        >
-          <span className="switch__text">
-            <span className="switch__name">3D</span>
-            <span className="switch__hint">Raised keys, tilted panels</span>
-          </span>
-          <span className="switch__track" aria-hidden="true">
-            <span className="switch__thumb" />
-          </span>
-        </button>
         <p className="drawer__note">The menu stays open so you can compare.</p>
       </aside>
     </React.Fragment>
@@ -921,17 +918,18 @@ function Calculator() {
 
   return (
     <div className="app">
-      <ThemeTrigger
-        current={THEMES.find((option) => option.id === theme) || THEMES[0]}
-        open={menuOpen}
-        onToggle={() => setMenuOpen((open) => !open)}
-      />
+      <div className="controls">
+        <ThemeTrigger
+          current={THEMES.find((option) => option.id === theme) || THEMES[0]}
+          open={menuOpen}
+          onToggle={() => setMenuOpen((open) => !open)}
+        />
+        <DepthTrigger depth={depth} onToggle={() => setDepth((on) => !on)} />
+      </div>
       {menuOpen && (
         <ThemeMenu
           theme={theme}
           onChange={setTheme}
-          depth={depth}
-          onDepthChange={setDepth}
           onClose={() => setMenuOpen(false)}
         />
       )}

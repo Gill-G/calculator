@@ -223,9 +223,12 @@ Four themes ship with the app — **Dark**, **Light**, **Midnight**, and
 **Sunset**. The **Theme** button in the top-left corner opens a sidebar menu
 listing them by name; close it with the ×, the backdrop, or `Esc`. Your choice
 is saved in `localStorage`, and on a first visit the app follows your system's
-light/dark preference.
+light/dark preference. The menu is themes and nothing else — 3D is a
+different kind of choice and gets its own button rather than a row in there.
 
-Below the themes is a **3D** switch. Turned on, the three panels angle towards
+Under the **Theme** button is a matching **3D** button — same pill, same
+corner — whose chip is a miniature of what it does: flat when off, standing
+on a side face when on. Turned on, the three panels angle towards
 each other like a small desk, the keys stand on a visible side face and sink
 when pressed, and the display and readout are set into the card rather than
 laid on it. It is saved in `localStorage` alongside the theme and applied
