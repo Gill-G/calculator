@@ -238,6 +238,9 @@ const WIDTHS = [
 
 const HEX_ALPHABET = "0123456789abcdef";
 
+// Each base reads best in its own grouping; hex and octal are left alone.
+const BASE_GROUPING = { bin: groupBits, dec: groupDigits };
+
 // What the Ans key puts in the expression. It never reaches Python: the value
 // is substituted in before the request, so the backend stays stateless and
 // two browsers can't tread on each other's answer.
@@ -299,6 +302,20 @@ function basesOf(value, width) {
 // Nibbles, so a 32-bit pattern can be read rather than counted.
 function groupBits(bits) {
   return bits.replace(/\B(?=(.{4})+$)/g, " ");
+}
+
+// Thousands separators for every decimal number in a string, whether it is a
+// lone result or a half-typed expression. Only the whole part is grouped --
+// digits after the point are not read in threes -- and this is presentation
+// only: the separators never enter the state, because "1,234" reaching
+// Python would parse as a tuple rather than a number.
+function groupDigits(text) {
+  return text.replace(/\d+(?:\.\d*)?/g, (number) => {
+    const point = number.indexOf(".");
+    const whole = point === -1 ? number : number.slice(0, point);
+    const rest = point === -1 ? "" : number.slice(point);
+    return whole.replace(/\B(?=(\d{3})+$)/g, ",") + rest;
+  });
 }
 
 // The last answer is kept as one decimal string whatever mode produced it,
@@ -456,7 +473,7 @@ function BaseReadout({ values, base, onBaseChange }) {
             >
               <span className="readout__label">{option.label}</span>
               <span className="readout__value">
-                {shown ? (option.id === "bin" ? groupBits(shown) : shown) : "—"}
+                {shown ? (BASE_GROUPING[option.id] || String)(shown) : "—"}
               </span>
             </button>
           </li>
@@ -506,6 +523,12 @@ function Display({ expression, hint, error, pending, units, answer, onInsertAnsw
   );
 }
 
+// Programmer entries carry the base they were typed in, and only the decimal
+// ones take separators -- commas every three hex digits would be nonsense.
+function readable(text, tag) {
+  return !tag || tag === "DEC" ? groupDigits(text) : text;
+}
+
 function History({ entries, onPick, onClear }) {
   return (
     <aside className="history">
@@ -532,9 +555,11 @@ function History({ entries, onPick, onClear }) {
                   {entry.tag && (
                     <span className="history__tag">{entry.tag}</span>
                   )}
-                  {entry.expression}
+                  {readable(entry.expression, entry.tag)}
                 </span>
-                <span className="history__result">{entry.result}</span>
+                <span className="history__result">
+                  {readable(entry.result, entry.tag)}
+                </span>
               </button>
             </li>
           ))}
@@ -611,6 +636,14 @@ function Calculator() {
   // Standard and scientific work in plain decimal; only programmer varies.
   const activeBase = activeMode.bases ? base : "dec";
   const answerValue = answerIn(answer, activeBase, Number(width));
+
+  // Separators are added on the way to the screen and nowhere else, so the
+  // expression the backend sees stays exactly what was typed. Hex, octal and
+  // binary keep their own conventions and are left unpunctuated here.
+  const readable = useCallback(
+    (text) => (activeBase === "dec" ? groupDigits(text) : text),
+    [activeBase]
+  );
 
   // A key the active base has no digit for: shown, but not usable.
   const outOfBase = useCallback(
@@ -854,12 +887,12 @@ function Calculator() {
       <main className="calculator">
         <ModeSwitcher mode={mode} onModeChange={setMode} />
         <Display
-          expression={expression}
-          hint={hint}
+          expression={readable(expression)}
+          hint={readable(hint)}
           error={error}
           pending={pending}
           units={units}
-          answer={answerValue}
+          answer={answerValue && readable(answerValue)}
           onInsertAnswer={() => append(ANS_TOKEN)}
         />
         {activeMode.bases && (

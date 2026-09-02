@@ -141,6 +141,13 @@ and `Esc` to clear. `r` inserts `√` and `p` inserts `π`. In programmer mode
 `a`–`f` type the hex digits, and a key the current base has no digit for
 stays inert whether you click it or type it.
 
+Long numbers are grouped for reading: `1234567` shows as `1,234,567`, while
+you type as well as in the answer, the history and the `ANS` chip. Digits
+after the point are left alone, and so are hex and octal — commas every three
+hex digits would mean nothing. Binary keeps its grouping in nibbles. The
+separators are added on the way to the screen and nowhere else, so what
+reaches Python is still the plain `1234567` you typed.
+
 Results land in the history panel — click any entry to reuse its value.
 Programmer entries are tagged with the base they were typed in, since `1010`
 means four different things without it.
