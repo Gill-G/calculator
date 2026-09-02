@@ -1,18 +1,21 @@
 const { useState, useEffect, useCallback, useRef } = React;
 
 // The keypad shows friendly symbols; the Python backend wants real operators.
+// Every entry is a single character, so the swap is a straight character map.
 const TO_PYTHON = {
   "×": "*",
   "÷": "/",
   "−": "-",
   "^": "**",
-  "√": "sqrt(",
+  "√": "sqrt",
   "π": "pi",
 };
 
 const OPERATORS = ["+", "−", "×", "÷", "%", "^"];
 
 const STORAGE_KEY = "calculator-theme";
+const MODE_KEY = "calculator-mode";
+const ANGLE_KEY = "calculator-angle";
 
 // The Node facts service runs beside the Python server, on its own port.
 // Derived from the current host so this still works over the network.
@@ -42,11 +45,24 @@ function readStoredTheme() {
   return "dark";
 }
 
-const KEYS = [
+// Same guarded read as the theme, for the two scientific-mode preferences.
+function readStored(key, allowed, fallback) {
+  try {
+    const saved = localStorage.getItem(key);
+    if (allowed.some((option) => option.id === saved)) return saved;
+  } catch (err) {
+    /* fall through to the default */
+  }
+  return fallback;
+}
+
+// Each key inserts `insert` when present, otherwise its own label -- so the
+// button can read "sin⁻¹" while the expression gets the plain `asin(`.
+const STANDARD_KEYS = [
   { label: "(", type: "fn" },
   { label: ")", type: "fn" },
   { label: "^", type: "op" },
-  { label: "√", type: "op" },
+  { label: "√", type: "op", insert: "√(" },
 
   { label: "C", type: "fn", action: "clear" },
   { label: "⌫", type: "fn", action: "backspace", aria: "Backspace" },
@@ -74,6 +90,71 @@ const KEYS = [
   { label: "=", type: "equals", action: "evaluate" },
 ];
 
+// The same four columns as the standard pad, with four rows of function keys
+// stacked on top, so the digits stay exactly where the hand expects them.
+const SCIENTIFIC_KEYS = [
+  { label: "sin", type: "sci", insert: "sin(", aria: "Sine" },
+  { label: "cos", type: "sci", insert: "cos(", aria: "Cosine" },
+  { label: "tan", type: "sci", insert: "tan(", aria: "Tangent" },
+  { label: "ln", type: "sci", insert: "ln(", aria: "Natural logarithm" },
+
+  { label: "sin⁻¹", type: "sci", insert: "asin(", aria: "Inverse sine" },
+  { label: "cos⁻¹", type: "sci", insert: "acos(", aria: "Inverse cosine" },
+  { label: "tan⁻¹", type: "sci", insert: "atan(", aria: "Inverse tangent" },
+  { label: "log", type: "sci", insert: "log(", aria: "Logarithm base 10" },
+
+  { label: "x²", type: "sci", insert: "^2", aria: "Squared" },
+  { label: "xʸ", type: "sci", insert: "^", aria: "To the power of" },
+  { label: "√", type: "sci", insert: "√(", aria: "Square root" },
+  { label: "n!", type: "sci", insert: "fact(", aria: "Factorial" },
+
+  { label: "eˣ", type: "sci", insert: "exp(", aria: "e to the power of" },
+  { label: "10ˣ", type: "sci", insert: "10^", aria: "10 to the power of" },
+  { label: "1/x", type: "sci", insert: "1/(", aria: "Reciprocal" },
+  { label: "|x|", type: "sci", insert: "abs(", aria: "Absolute value" },
+
+  { label: "(", type: "fn" },
+  { label: ")", type: "fn" },
+  { label: "π", type: "fn" },
+  { label: "e", type: "fn", aria: "Euler's number" },
+
+  { label: "C", type: "fn", action: "clear" },
+  { label: "⌫", type: "fn", action: "backspace", aria: "Backspace" },
+  { label: "%", type: "op" },
+  { label: "÷", type: "op" },
+
+  { label: "7" },
+  { label: "8" },
+  { label: "9" },
+  { label: "×", type: "op" },
+
+  { label: "4" },
+  { label: "5" },
+  { label: "6" },
+  { label: "−", type: "op" },
+
+  { label: "1" },
+  { label: "2" },
+  { label: "3" },
+  { label: "+", type: "op" },
+
+  { label: "×10ˣ", type: "sci", insert: "×10^", aria: "Times ten to the power of" },
+  { label: "0" },
+  { label: "." },
+  { label: "=", type: "equals", action: "evaluate" },
+];
+
+// Adding a mode means adding a row here and a keypad above it.
+const MODES = [
+  { id: "standard", label: "Standard", keys: STANDARD_KEYS },
+  { id: "scientific", label: "Scientific", keys: SCIENTIFIC_KEYS, angles: true },
+];
+
+const ANGLES = [
+  { id: "deg", label: "DEG" },
+  { id: "rad", label: "RAD" },
+];
+
 // Keyboard character -> keypad label.
 const KEY_MAP = {
   "*": "×",
@@ -89,6 +170,19 @@ function toPython(display) {
     .split("")
     .map((ch) => TO_PYTHON[ch] || ch)
     .join("");
+}
+
+// Function keys open a bracket they never close -- pressing √ then 25 leaves
+// "√(25". Closing the stragglers on "=" is what a pocket calculator does, and
+// it saves hunting for ")" after every sin, ln or n!. Surplus ")" is left
+// alone so a genuinely malformed expression still reports an error.
+function balanceParens(display) {
+  let open = 0;
+  for (const ch of display) {
+    if (ch === "(") open += 1;
+    else if (ch === ")") open = Math.max(0, open - 1);
+  }
+  return display + ")".repeat(open);
 }
 
 function ThemeTrigger({ current, open, onToggle }) {
@@ -152,6 +246,42 @@ function ThemeMenu({ theme, onChange, onClose }) {
         <p className="drawer__note">The menu stays open so you can compare.</p>
       </aside>
     </React.Fragment>
+  );
+}
+
+function ModeSwitcher({ mode, onModeChange, angle, onAngleChange, showAngles }) {
+  return (
+    <div className="modes">
+      <div className="modes__tabs" role="tablist" aria-label="Calculator mode">
+        {MODES.map((option) => (
+          <button
+            key={option.id}
+            className="mode-tab"
+            role="tab"
+            aria-selected={mode === option.id}
+            aria-controls="keypad"
+            onClick={() => onModeChange(option.id)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {showAngles && (
+        <div className="angles" role="group" aria-label="Angle unit">
+          {ANGLES.map((option) => (
+            <button
+              key={option.id}
+              className="angle-tab"
+              aria-pressed={angle === option.id}
+              onClick={() => onAngleChange(option.id)}
+              title={option.id === "deg" ? "Degrees" : "Radians"}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -258,6 +388,11 @@ function Calculator() {
   const nextId = useRef(1);
   const [theme, setTheme] = useState(readStoredTheme);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mode, setMode] = useState(() => readStored(MODE_KEY, MODES, "standard"));
+  const [angle, setAngle] = useState(() => readStored(ANGLE_KEY, ANGLES, "deg"));
+
+  const activeMode = MODES.find((option) => option.id === mode) || MODES[0];
+  const keys = activeMode.keys;
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -268,8 +403,17 @@ function Calculator() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+      localStorage.setItem(ANGLE_KEY, angle);
+    } catch (err) {
+      /* the choice still applies for this session */
+    }
+  }, [mode, angle]);
+
   const append = useCallback(
-    (label) => {
+    (text) => {
       setError("");
       if (settled) {
         // After "=", typing a number starts over but an operator continues
@@ -277,10 +421,10 @@ function Calculator() {
         setHint("");
         setSettled(false);
         setExpression((current) =>
-          OPERATORS.includes(label) ? current + label : label
+          OPERATORS.includes(text) ? current + text : text
         );
       } else {
-        setExpression((current) => current + label);
+        setExpression((current) => current + text);
       }
     },
     [settled]
@@ -300,7 +444,7 @@ function Calculator() {
   }, []);
 
   const evaluate = useCallback(async () => {
-    const display = expression.trim();
+    const display = balanceParens(expression.trim());
     if (!display || pending) return;
 
     setPending(true);
@@ -309,7 +453,7 @@ function Calculator() {
       const response = await fetch("/api/calc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expression: toPython(display) }),
+        body: JSON.stringify({ expression: toPython(display), angle }),
       });
       const data = await response.json();
 
@@ -332,14 +476,14 @@ function Calculator() {
     } finally {
       setPending(false);
     }
-  }, [expression, pending]);
+  }, [angle, expression, pending]);
 
   const pressKey = useCallback(
     (key) => {
       if (key.action === "clear") return clear();
       if (key.action === "backspace") return backspace();
       if (key.action === "evaluate") return evaluate();
-      append(key.label);
+      append(key.insert || key.label);
     },
     [append, backspace, clear, evaluate]
   );
@@ -374,16 +518,17 @@ function Calculator() {
         }
       } else {
         const mapped = KEY_MAP[key] || key;
-        if (KEYS.some((k) => k.label === mapped)) {
+        const match = keys.find((k) => k.label === mapped);
+        if (match) {
           event.preventDefault();
-          append(mapped);
+          append(match.insert || match.label);
         }
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [append, backspace, clear, evaluate, menuOpen]);
+  }, [append, backspace, clear, evaluate, keys, menuOpen]);
 
   return (
     <div className="app">
@@ -401,14 +546,21 @@ function Calculator() {
       )}
       <FactBubble />
       <main className="calculator">
+        <ModeSwitcher
+          mode={mode}
+          onModeChange={setMode}
+          angle={angle}
+          onAngleChange={setAngle}
+          showAngles={Boolean(activeMode.angles)}
+        />
         <Display
           expression={expression}
           hint={hint}
           error={error}
           pending={pending}
         />
-        <div className="keypad">
-          {KEYS.map((key) => (
+        <div id="keypad" className={"keypad keypad--" + activeMode.id}>
+          {keys.map((key) => (
             <button
               key={key.label}
               className={"key" + (key.type ? " key--" + key.type : "")}
