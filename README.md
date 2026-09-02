@@ -9,8 +9,8 @@ A small calculator app: a **React** frontend that hands every expression to a
 **Python** backend, which does the arithmetic and hands back the answer. A
 small **Node** service alongside it serves the fun facts.
 
-Two modes so far — **Standard** and **Scientific** — picked from the switcher
-above the display.
+Three modes — **Standard**, **Scientific** and **Programmer** — picked from
+the switcher above the display.
 
 The frontend has no build step — React arrives from a CDN — and the Python
 side is standard library only. The only third-party packages anywhere are
@@ -67,7 +67,21 @@ curl -X POST http://127.0.0.1:8000/api/calc \
 # {"expression": "sin(90)", "angle": "deg", "result": "1"}
 ```
 
-Errors come back as `{"error": "Cannot divide by zero"}` with a 400.
+`"mode": "programmer"` switches to the integer evaluator instead, with
+`"base"` (`hex`/`dec`/`oct`/`bin`, default `dec`) saying how to read the
+numbers and `"width"` (8, 16, 32 or 64, default 32) how many bits to keep:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/calc \
+  -H 'Content-Type: application/json' \
+  -d '{"expression": "FF & F0", "mode": "programmer", "base": "hex"}'
+# {"expression": "FF & F0", "mode": "programmer", "base": "hex",
+#  "width": 32, "result": "F0"}
+```
+
+Every field is optional, so a bare `{"expression": ...}` still means what it
+always did. Errors come back as `{"error": "Cannot divide by zero"}` with a
+400.
 
 `eval()` is never used. The expression is parsed with `ast` and the tree is
 walked by hand, so only whitelisted nodes run: numbers, `+ - * / // % **`,
@@ -85,6 +99,19 @@ unary `+/-`, the constants `pi`/`e`/`tau`, and these functions:
 Anything else — a name, an import, a list, a call to something unlisted — is
 rejected. Exponents are capped at ±1000, factorials at 500, and expressions at
 200 characters so one request can't wedge the server.
+
+Programmer mode is a second, narrower walk of the same tree. Before parsing,
+every literal is rewritten from the request's base into decimal, so the
+parser only ever sees base 10 while `FF` and `1010` keep meaning what you
+typed; a digit the base doesn't have is reported by name. Then only whole
+numbers, `+ - * / %`, `& | ^ ~`, `<< >>` and brackets are allowed — no
+constants, no functions, and no `**`, because `^` is XOR here.
+
+Each step is truncated to the word size and read back as signed two's
+complement, which is what makes `~0` read as `FFFFFFFF` at 32 bits and `FF *
+FF` come to `1` at 8. Division truncates toward zero and the remainder takes
+the sign of the dividend, matching C rather than Python. Shift counts are
+capped at the word size, so `1 << 10000` is `0` rather than a stalled server.
 
 ## Fun facts
 
@@ -110,9 +137,13 @@ side enables CORS.
 
 Click the keys or type. The keyboard accepts digits, `+ - * /` (and `x` for
 ×), `%`, `^`, `(`, `)`, `.`, `Enter`/`=` to calculate, `Backspace` to delete,
-and `Esc` to clear. `r` inserts `√` and `p` inserts `π`.
+and `Esc` to clear. `r` inserts `√` and `p` inserts `π`. In programmer mode
+`a`–`f` type the hex digits, and a key the current base has no digit for
+stays inert whether you click it or type it.
 
 Results land in the history panel — click any entry to reuse its value.
+Programmer entries are tagged with the base they were typed in, since `1010`
+means four different things without it.
 
 ## Modes
 
@@ -124,7 +155,7 @@ The switcher above the display picks the keypad. Your choice is saved in
 **Scientific** keeps those digits and operators exactly where they were and
 stacks four rows of function keys on top: `sin` `cos` `tan` and their
 inverses, `ln` and `log`, `x²` `xʸ` `√` `n!`, `eˣ` `10ˣ` `1/x` `|x|`, plus
-`π`, `e` and `×10ˣ`. The **DEG**/**RAD** toggle beside the switcher sets the
+`π`, `e` and `×10ˣ`. The **DEG**/**RAD** toggle under the switcher sets the
 unit for the trig keys — it is sent with the request, so the conversion
 happens in Python rather than in the expression.
 
@@ -133,7 +164,19 @@ reads: `sin⁻¹` enters `asin(`, `n!` enters `fact(`, `x²` enters `^2`. A
 function key opens its bracket and you can leave it open — unclosed brackets
 are closed for you when you press `=`, so `√25` and `sin(90` both work.
 
-Adding a third mode means adding a key array and one entry to `MODES` in
+**Programmer** works in whole numbers over a fixed word size. The **HEX**,
+**DEC**, **OCT** and **BIN** rows under the display show the value you are
+typing in all four bases at once, and clicking a row switches to entering
+numbers in that base — the display is re-spelled rather than rejected, so
+`FF` becomes `255`. Digits the base doesn't have grey out on the keypad
+rather than moving, so `A`–`F` are live only in hex, `8` and `9` only from
+decimal up, and binary leaves just `0` and `1`. `AND` `OR` `XOR` `NOT` and
+`<<` `>>` enter `&` `|` `^` `~` `<<` `>>`, and the **8**/**16**/**32**/**64**
+toggle under the switcher sets how many bits a result keeps.
+
+Clear is labelled `AC` in this mode, because `C` is a hex digit.
+
+Adding another mode means adding a key array and one entry to `MODES` in
 `static/app.jsx`.
 
 ## Themes
@@ -149,6 +192,8 @@ theme means adding one `[data-theme="..."]` block of tokens and one entry to
 the `THEMES` array in `static/app.jsx`.
 
 One note on symbols: `%` is **modulo** (`7 % 3` is `1`), not "percent of".
+In programmer mode `^` is **XOR**, not a power — the `xʸ` key lives in
+scientific mode.
 
 ## Node
 

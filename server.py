@@ -2,8 +2,8 @@
 """A tiny calculator backend built on the Python standard library.
 
 Serves the React frontend in static/ and evaluates arithmetic expressions
-posted to /api/calc, in either standard or scientific form. Random facts come
-from the separate Node service in
+posted to /api/calc, in standard, scientific or programmer form. Random facts
+come from the separate Node service in
 facts-server.js. Expressions are parsed with `ast` and walked by hand --
 `eval` is never used, so only the whitelisted operators below can run.
 
@@ -17,6 +17,7 @@ import json
 import math
 import operator
 import os
+import re
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -83,6 +84,11 @@ DEGREE_FUNCTIONS = {
 
 ANGLE_MODES = {"rad": RADIAN_FUNCTIONS, "deg": DEGREE_FUNCTIONS}
 DEFAULT_ANGLE_MODE = "rad"
+
+# "standard" and "scientific" share an evaluator -- they differ only in which
+# keys the frontend offers. "programmer" is a separate one, below.
+CALC_MODES = ("standard", "scientific", "programmer")
+DEFAULT_MODE = "standard"
 
 # Keeps `9 ** 9 ** 9` from hanging the server on a single request.
 MAX_EXPONENT = 1000
@@ -188,6 +194,154 @@ def format_number(value):
     return text
 
 
+# --- Programmer mode -------------------------------------------------------
+# Integer-only arithmetic over a fixed word size, with the bitwise operators
+# a programmer expects. Literals are read in the caller's base, so "FF" and
+# "11111111" are the same request with a different `base`.
+
+BASE_RADIX = {"hex": 16, "dec": 10, "oct": 8, "bin": 2}
+DEFAULT_BASE = "dec"
+
+BASE_DIGITS = {16: "0123456789abcdef", 10: "0123456789", 8: "01234567", 2: "01"}
+
+# How each base renders a result. Decimal is handled separately: it is the
+# only one that shows a sign rather than a bit pattern.
+BASE_FORMATS = {16: "X", 8: "o", 2: "b"}
+
+WIDTHS = (8, 16, 32, 64)
+DEFAULT_WIDTH = 32
+
+# `^` means XOR here rather than a power, so Pow is deliberately absent.
+# Division, remainder and the shifts need more than an operator each and are
+# handled in _eval_int_node.
+PROGRAMMER_BIN_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.BitAnd: operator.and_,
+    ast.BitOr: operator.or_,
+    ast.BitXor: operator.xor,
+}
+
+PROGRAMMER_UNARY_OPS = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+    ast.Invert: operator.invert,
+}
+
+# A run of letters and digits is one number literal in the active base.
+TOKEN_RE = re.compile(r"[0-9A-Za-z_]+")
+
+
+def _wrap(value, width):
+    """Truncate to `width` bits and read the result back as signed."""
+    value &= (1 << width) - 1
+    if value >= 1 << (width - 1):
+        value -= 1 << width
+    return value
+
+
+def _int_divide(a, b):
+    """Division that truncates toward zero, the way C does it."""
+    if b == 0:
+        raise CalculationError("Cannot divide by zero")
+    quotient = abs(a) // abs(b)
+    return -quotient if (a < 0) != (b < 0) else quotient
+
+
+def _int_remainder(a, b):
+    """Remainder whose sign follows the dividend -- again, C's rule."""
+    return a - _int_divide(a, b) * b
+
+
+def _rewrite_literals(expression, radix):
+    """Rewrite every number literal from `radix` into plain decimal.
+
+    Doing this before `ast.parse` means the parser only ever sees base 10,
+    while "FF" and "1010" keep meaning what the caller typed. A token holding
+    a digit the base does not have is a typo, and says so by name.
+    """
+    digits = BASE_DIGITS[radix]
+
+    def replace(match):
+        token = match.group(0)
+        if any(ch not in digits for ch in token.lower()):
+            raise CalculationError(f"'{token}' is not a base-{radix} number")
+        return str(int(token, radix))
+
+    return TOKEN_RE.sub(replace, expression)
+
+
+def evaluate_programmer(expression, base=DEFAULT_BASE, width=DEFAULT_WIDTH):
+    """Evaluate an integer expression written in `base`, over `width` bits."""
+    if len(expression) > MAX_EXPRESSION_LENGTH:
+        raise CalculationError("Expression too long")
+    radix = BASE_RADIX.get(base)
+    if radix is None:
+        raise CalculationError("Base must be 'hex', 'dec', 'oct' or 'bin'")
+    if width not in WIDTHS:
+        raise CalculationError("Word size must be 8, 16, 32 or 64")
+
+    try:
+        tree = ast.parse(_rewrite_literals(expression, radix), mode="eval")
+    except SyntaxError:
+        raise CalculationError("Invalid expression")
+
+    return _eval_int_node(tree.body, width)
+
+
+def _eval_int_node(node, width):
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, bool) or not isinstance(node.value, int):
+            raise CalculationError("Programmer mode works on whole numbers only")
+        return _wrap(node.value, width)
+
+    if isinstance(node, ast.BinOp):
+        left = _eval_int_node(node.left, width)
+        right = _eval_int_node(node.right, width)
+        op_type = type(node.op)
+
+        if op_type in (ast.Div, ast.FloorDiv):
+            return _wrap(_int_divide(left, right), width)
+
+        if op_type is ast.Mod:
+            return _wrap(_int_remainder(left, right), width)
+
+        if op_type in (ast.LShift, ast.RShift):
+            if right < 0:
+                raise CalculationError("Shift count cannot be negative")
+            # Past the word size every bit has shifted out, so capping the
+            # count keeps `1 << 10000` cheap without changing the answer.
+            count = min(right, width)
+            shifted = left << count if op_type is ast.LShift else left >> count
+            return _wrap(shifted, width)
+
+        op = PROGRAMMER_BIN_OPS.get(op_type)
+        if op is None:
+            raise CalculationError("Unsupported operator")
+        return _wrap(op(left, right), width)
+
+    if isinstance(node, ast.UnaryOp):
+        op = PROGRAMMER_UNARY_OPS.get(type(node.op))
+        if op is None:
+            raise CalculationError("Unsupported operator")
+        return _wrap(op(_eval_int_node(node.operand, width)), width)
+
+    raise CalculationError("Invalid expression")
+
+
+def format_in_base(value, base, width):
+    """Render an integer the way the active base shows it.
+
+    Decimal keeps the sign; the bit-oriented bases show the two's-complement
+    pattern instead, which is what makes -1 read as FFFFFFFF.
+    """
+    radix = BASE_RADIX[base]
+    if radix == 10:
+        return str(value)
+    return format(value & ((1 << width) - 1), BASE_FORMATS[radix])
+
+
 class CalculatorHandler(SimpleHTTPRequestHandler):
     # Browsers get a sensible type for the JSX that Babel loads at runtime.
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map, ".jsx": "text/jsx"}
@@ -211,10 +365,24 @@ class CalculatorHandler(SimpleHTTPRequestHandler):
         try:
             payload = json.loads(self.rfile.read(length))
             expression = str(payload["expression"]).strip()
-            # Older clients omit "angle"; radians stays the default.
+            # Older clients send none of these; the defaults leave a bare
+            # {"expression": ...} request behaving exactly as it always did.
+            mode = str(payload.get("mode") or DEFAULT_MODE).strip().lower()
             angle = str(payload.get("angle") or DEFAULT_ANGLE_MODE).strip().lower()
-        except (json.JSONDecodeError, KeyError, TypeError, UnicodeDecodeError):
+            base = str(payload.get("base") or DEFAULT_BASE).strip().lower()
+            width = int(payload.get("width") or DEFAULT_WIDTH)
+        except (
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+            UnicodeDecodeError,
+            ValueError,
+        ):
             self._send_json(400, {"error": "Expected JSON with an 'expression' field"})
+            return
+
+        if mode not in CALC_MODES:
+            self._send_json(400, {"error": "Unknown mode"})
             return
 
         if not expression:
@@ -222,7 +390,21 @@ class CalculatorHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            result = evaluate(expression, angle)
+            if mode == "programmer":
+                value = evaluate_programmer(expression, base, width)
+                body = {
+                    "expression": expression,
+                    "mode": mode,
+                    "base": base,
+                    "width": width,
+                    "result": format_in_base(value, base, width),
+                }
+            else:
+                body = {
+                    "expression": expression,
+                    "angle": angle,
+                    "result": format_number(evaluate(expression, angle)),
+                }
         except CalculationError as exc:
             self._send_json(400, {"error": str(exc)})
             return
@@ -230,10 +412,7 @@ class CalculatorHandler(SimpleHTTPRequestHandler):
             self._send_json(400, {"error": "Expression is too deeply nested"})
             return
 
-        self._send_json(
-            200,
-            {"expression": expression, "angle": angle, "result": format_number(result)},
-        )
+        self._send_json(200, body)
 
     def _send_json(self, status, body):
         encoded = json.dumps(body).encode("utf-8")

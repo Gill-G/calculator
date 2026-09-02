@@ -11,11 +11,20 @@ const TO_PYTHON = {
   "π": "pi",
 };
 
-const OPERATORS = ["+", "−", "×", "÷", "%", "^"];
+// Programmer mode reads ^ as XOR rather than a power, so it needs its own
+// map -- everything else about the swap is the same.
+const PROGRAMMER_TO_PYTHON = { "×": "*", "÷": "/", "−": "-" };
+
+// Pressing one of these straight after "=" continues from the result instead
+// of starting over. `~` is missing on purpose: it only makes sense in front
+// of a value, so it starts a fresh expression.
+const OPERATORS = ["+", "−", "×", "÷", "%", "^", "&", "|", "<<", ">>"];
 
 const STORAGE_KEY = "calculator-theme";
 const MODE_KEY = "calculator-mode";
 const ANGLE_KEY = "calculator-angle";
+const BASE_KEY = "calculator-base";
+const WIDTH_KEY = "calculator-width";
 
 // The Node facts service runs beside the Python server, on its own port.
 // Derived from the current host so this still works over the network.
@@ -45,7 +54,7 @@ function readStoredTheme() {
   return "dark";
 }
 
-// Same guarded read as the theme, for the two scientific-mode preferences.
+// Same guarded read as the theme, for the per-mode preferences.
 function readStored(key, allowed, fallback) {
   try {
     const saved = localStorage.getItem(key);
@@ -144,16 +153,90 @@ const SCIENTIFIC_KEYS = [
   { label: "=", type: "equals", action: "evaluate" },
 ];
 
-// Adding a mode means adding a row here and a keypad above it.
+// Bases 2-16 in four columns. The hex letters sit in their own block so the
+// digits keep the positions they have in the other two keypads, and `digit`
+// says which base a key first becomes usable in -- A is meaningless below
+// base 16, 9 below base 10. Clear is "AC" here because "C" is a hex digit.
+const PROGRAMMER_KEYS = [
+  { label: "AND", type: "bit", insert: "&", aria: "Bitwise and" },
+  { label: "OR", type: "bit", insert: "|", aria: "Bitwise or" },
+  { label: "XOR", type: "bit", insert: "^", aria: "Bitwise exclusive or" },
+  { label: "NOT", type: "bit", insert: "~", aria: "Bitwise not" },
+
+  { label: "<<", type: "bit", aria: "Shift left" },
+  { label: ">>", type: "bit", aria: "Shift right" },
+  { label: "(", type: "fn" },
+  { label: ")", type: "fn" },
+
+  { label: "A", type: "hex", digit: 10 },
+  { label: "B", type: "hex", digit: 11 },
+  { label: "C", type: "hex", digit: 12 },
+  { label: "D", type: "hex", digit: 13 },
+
+  { label: "E", type: "hex", digit: 14 },
+  { label: "F", type: "hex", digit: 15 },
+  { label: "AC", type: "fn", action: "clear", aria: "Clear" },
+  { label: "⌫", type: "fn", action: "backspace", aria: "Backspace" },
+
+  { label: "7", digit: 7 },
+  { label: "8", digit: 8 },
+  { label: "9", digit: 9 },
+  { label: "÷", type: "op" },
+
+  { label: "4", digit: 4 },
+  { label: "5", digit: 5 },
+  { label: "6", digit: 6 },
+  { label: "×", type: "op" },
+
+  { label: "1", digit: 1 },
+  { label: "2", digit: 2 },
+  { label: "3", digit: 3 },
+  { label: "−", type: "op" },
+
+  { label: "%", type: "op" },
+  { label: "0", digit: 0 },
+  { label: "+", type: "op" },
+  { label: "=", type: "equals", action: "evaluate" },
+];
+
+// Adding a mode means adding a row here and a keypad above it. `angles` and
+// `bases` pick which unit control sits under the tabs; `symbols` overrides
+// the display-to-Python map when the default reading is wrong.
 const MODES = [
   { id: "standard", label: "Standard", keys: STANDARD_KEYS },
   { id: "scientific", label: "Scientific", keys: SCIENTIFIC_KEYS, angles: true },
+  {
+    id: "programmer",
+    label: "Programmer",
+    keys: PROGRAMMER_KEYS,
+    bases: true,
+    symbols: PROGRAMMER_TO_PYTHON,
+  },
 ];
 
 const ANGLES = [
-  { id: "deg", label: "DEG" },
-  { id: "rad", label: "RAD" },
+  { id: "deg", label: "DEG", title: "Degrees" },
+  { id: "rad", label: "RAD", title: "Radians" },
 ];
+
+const BASES = [
+  { id: "hex", label: "HEX", title: "hexadecimal" },
+  { id: "dec", label: "DEC", title: "decimal" },
+  { id: "oct", label: "OCT", title: "octal" },
+  { id: "bin", label: "BIN", title: "binary" },
+];
+
+const BASE_RADIX = { hex: 16, dec: 10, oct: 8, bin: 2 };
+
+// Word sizes, as ids so they round-trip through localStorage like the rest.
+const WIDTHS = [
+  { id: "8", label: "8", title: "8-bit words" },
+  { id: "16", label: "16", title: "16-bit words" },
+  { id: "32", label: "32", title: "32-bit words" },
+  { id: "64", label: "64", title: "64-bit words" },
+];
+
+const HEX_ALPHABET = "0123456789abcdef";
 
 // Keyboard character -> keypad label.
 const KEY_MAP = {
@@ -165,11 +248,52 @@ const KEY_MAP = {
   r: "√",
 };
 
-function toPython(display) {
+function toPython(display, symbols) {
   return display
     .split("")
-    .map((ch) => TO_PYTHON[ch] || ch)
+    .map((ch) => symbols[ch] || ch)
     .join("");
+}
+
+// The base readout follows the display as it is typed, so the conversion has
+// to happen here rather than in a round trip. Only a lone literal converts --
+// half an expression has no single value to show, and null means "show —".
+function convertBases(display, base, width) {
+  const text = display.trim();
+  if (!text) return basesOf(0n, width);
+
+  const match = /^(-?)([0-9A-Za-z]+)$/.exec(text);
+  if (!match) return null;
+  const [, sign, digits] = match;
+
+  const radix = BASE_RADIX[base];
+  const alphabet = HEX_ALPHABET.slice(0, radix);
+  let value = 0n;
+  for (const ch of digits.toLowerCase()) {
+    const digit = alphabet.indexOf(ch);
+    if (digit < 0) return null;
+    value = value * BigInt(radix) + BigInt(digit);
+  }
+  return basesOf(sign ? -value : value, width);
+}
+
+// One value, four ways. Decimal keeps the sign; the bit-oriented bases show
+// the two's-complement pattern, which is what makes -1 read as FFFFFFFF.
+function basesOf(value, width) {
+  const span = 1n << BigInt(width);
+  const bits = ((value % span) + span) % span;
+  const signed = bits >= span / 2n ? bits - span : bits;
+  return {
+    hex: bits.toString(16).toUpperCase(),
+    dec: signed.toString(10),
+    oct: bits.toString(8),
+    bin: bits.toString(2),
+  };
+}
+
+// Nibbles, so a 32-bit pattern can be read rather than counted.
+function groupBits(bits) {
+  return bits.replace(/\B(?=(.{4})+$)/g, " ");
 }
 
 // Function keys open a bracket they never close -- pressing √ then 25 leaves
@@ -249,7 +373,9 @@ function ThemeMenu({ theme, onChange, onClose }) {
   );
 }
 
-function ModeSwitcher({ mode, onModeChange, angle, onAngleChange, showAngles }) {
+// `units` is whatever second control the active mode wants under the tabs:
+// DEG/RAD for scientific, the word size for programmer, nothing otherwise.
+function ModeSwitcher({ mode, onModeChange, units }) {
   return (
     <div className="modes">
       <div className="modes__tabs" role="tablist" aria-label="Calculator mode">
@@ -266,15 +392,15 @@ function ModeSwitcher({ mode, onModeChange, angle, onAngleChange, showAngles }) 
           </button>
         ))}
       </div>
-      {showAngles && (
-        <div className="angles" role="group" aria-label="Angle unit">
-          {ANGLES.map((option) => (
+      {units && (
+        <div className="units" role="group" aria-label={units.label}>
+          {units.options.map((option) => (
             <button
               key={option.id}
-              className="angle-tab"
-              aria-pressed={angle === option.id}
-              onClick={() => onAngleChange(option.id)}
-              title={option.id === "deg" ? "Degrees" : "Radians"}
+              className="unit-tab"
+              aria-pressed={units.value === option.id}
+              onClick={() => units.onChange(option.id)}
+              title={option.title}
             >
               {option.label}
             </button>
@@ -282,6 +408,34 @@ function ModeSwitcher({ mode, onModeChange, angle, onAngleChange, showAngles }) 
         </div>
       )}
     </div>
+  );
+}
+
+// Programmer mode's second display: the same value in all four bases, with
+// the active one highlighted. The rows are also how you switch base -- a
+// separate set of tabs for that would say the same thing twice.
+function BaseReadout({ values, base, onBaseChange }) {
+  return (
+    <ul className="readout">
+      {BASES.map((option) => {
+        const shown = values && values[option.id];
+        return (
+          <li key={option.id}>
+            <button
+              className="readout__row"
+              aria-pressed={base === option.id}
+              onClick={() => onBaseChange(option.id)}
+              title={`Enter numbers in ${option.title}`}
+            >
+              <span className="readout__label">{option.label}</span>
+              <span className="readout__value">
+                {shown ? (option.id === "bin" ? groupBits(shown) : shown) : "—"}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -323,7 +477,12 @@ function History({ entries, onPick, onClear }) {
                 onClick={() => onPick(entry.result)}
                 title="Use this result"
               >
-                <span className="history__expr">{entry.expression}</span>
+                <span className="history__expr">
+                  {entry.tag && (
+                    <span className="history__tag">{entry.tag}</span>
+                  )}
+                  {entry.expression}
+                </span>
                 <span className="history__result">{entry.result}</span>
               </button>
             </li>
@@ -390,9 +549,29 @@ function Calculator() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mode, setMode] = useState(() => readStored(MODE_KEY, MODES, "standard"));
   const [angle, setAngle] = useState(() => readStored(ANGLE_KEY, ANGLES, "deg"));
+  const [base, setBase] = useState(() => readStored(BASE_KEY, BASES, "dec"));
+  const [width, setWidth] = useState(() => readStored(WIDTH_KEY, WIDTHS, "32"));
 
   const activeMode = MODES.find((option) => option.id === mode) || MODES[0];
   const keys = activeMode.keys;
+  const radix = BASE_RADIX[base];
+
+  // A key the active base has no digit for: shown, but not usable.
+  const outOfBase = useCallback(
+    (key) => Boolean(activeMode.bases) && key.digit !== undefined && key.digit >= radix,
+    [activeMode, radix]
+  );
+
+  const units = activeMode.angles
+    ? {
+        label: "Angle unit",
+        options: ANGLES,
+        value: angle,
+        onChange: setAngle,
+      }
+    : activeMode.bases
+    ? { label: "Word size", options: WIDTHS, value: width, onChange: setWidth }
+    : null;
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -407,10 +586,12 @@ function Calculator() {
     try {
       localStorage.setItem(MODE_KEY, mode);
       localStorage.setItem(ANGLE_KEY, angle);
+      localStorage.setItem(BASE_KEY, base);
+      localStorage.setItem(WIDTH_KEY, width);
     } catch (err) {
       /* the choice still applies for this session */
     }
-  }, [mode, angle]);
+  }, [mode, angle, base, width]);
 
   const append = useCallback(
     (text) => {
@@ -453,7 +634,13 @@ function Calculator() {
       const response = await fetch("/api/calc", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expression: toPython(display), angle }),
+        body: JSON.stringify({
+          expression: toPython(display, activeMode.symbols || TO_PYTHON),
+          mode,
+          angle,
+          base,
+          width: Number(width),
+        }),
       });
       const data = await response.json();
 
@@ -467,7 +654,13 @@ function Calculator() {
       setSettled(true);
       setHistory((entries) =>
         [
-          { id: nextId.current++, expression: display, result: data.result },
+          {
+            id: nextId.current++,
+            expression: display,
+            result: data.result,
+            // "1010" means nothing without knowing which base it was typed in.
+            tag: activeMode.bases ? base.toUpperCase() : null,
+          },
           ...entries,
         ].slice(0, 25)
       );
@@ -476,7 +669,22 @@ function Calculator() {
     } finally {
       setPending(false);
     }
-  }, [angle, expression, pending]);
+  }, [activeMode, angle, base, expression, mode, pending, width]);
+
+  // Switching base re-spells whatever is on screen, the way a pocket
+  // calculator does -- FF becomes 255 rather than an invalid-digit error.
+  // A part-typed expression has no single value, so it is left alone.
+  const changeBase = useCallback(
+    (next) => {
+      const values = convertBases(expression, base, Number(width));
+      setBase(next);
+      if (values) {
+        setError("");
+        setExpression(expression.trim() ? values[next] : "");
+      }
+    },
+    [base, expression, width]
+  );
 
   const pressKey = useCallback(
     (key) => {
@@ -518,8 +726,11 @@ function Calculator() {
         }
       } else {
         const mapped = KEY_MAP[key] || key;
-        const match = keys.find((k) => k.label === mapped);
-        if (match) {
+        // Hex digits are typed lowercase but labelled upper, so try both.
+        const match =
+          keys.find((k) => k.label === mapped) ||
+          keys.find((k) => k.label === mapped.toUpperCase());
+        if (match && !outOfBase(match)) {
           event.preventDefault();
           append(match.insert || match.label);
         }
@@ -528,7 +739,7 @@ function Calculator() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [append, backspace, clear, evaluate, keys, menuOpen]);
+  }, [append, backspace, clear, evaluate, keys, menuOpen, outOfBase]);
 
   return (
     <div className="app">
@@ -546,26 +757,30 @@ function Calculator() {
       )}
       <FactBubble />
       <main className="calculator">
-        <ModeSwitcher
-          mode={mode}
-          onModeChange={setMode}
-          angle={angle}
-          onAngleChange={setAngle}
-          showAngles={Boolean(activeMode.angles)}
-        />
+        <ModeSwitcher mode={mode} onModeChange={setMode} units={units} />
         <Display
           expression={expression}
           hint={hint}
           error={error}
           pending={pending}
         />
+        {activeMode.bases && (
+          <BaseReadout
+            values={convertBases(expression, base, Number(width))}
+            base={base}
+            onBaseChange={changeBase}
+          />
+        )}
         <div id="keypad" className={"keypad keypad--" + activeMode.id}>
           {keys.map((key) => (
             <button
               key={key.label}
               className={"key" + (key.type ? " key--" + key.type : "")}
               onClick={() => pressKey(key)}
-              disabled={key.action === "evaluate" && (pending || !expression)}
+              disabled={
+                outOfBase(key) ||
+                (key.action === "evaluate" && (pending || !expression))
+              }
               aria-label={key.aria || key.label}
             >
               {key.label}
