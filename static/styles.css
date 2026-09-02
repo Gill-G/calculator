@@ -164,10 +164,78 @@ body {
   opacity: 0.55;
 }
 
+/* Mode switcher: a segmented control, with the angle unit sitting opposite
+   it -- shown only by modes that declare `angles`. */
+.modes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.modes__tabs,
+.angles {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--panel-raised);
+  border-radius: 999px;
+}
+
+.mode-tab,
+.angle-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.angle-tab {
+  padding: 7px 10px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.mode-tab:hover,
+.angle-tab:hover {
+  color: var(--text);
+}
+
+.mode-tab[aria-selected="true"],
+.angle-tab[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.mode-tab:focus-visible,
+.angle-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .keypad {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
+}
+
+/* Ten rows instead of six, so the keys give back some height. */
+.keypad--scientific {
+  gap: 8px;
+}
+
+.keypad--scientific .key {
+  padding: 13px 0;
+  font-size: 18px;
 }
 
 .key {
@@ -209,6 +277,19 @@ body {
 
 .key--op {
   color: var(--accent);
+}
+
+/* Scientific functions: quieter than a digit, more present than a `fn`. */
+.key--sci {
+  background: var(--panel-raised);
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.key--sci:hover {
+  background: var(--key-hover);
+  color: var(--text);
 }
 
 .key--equals {
