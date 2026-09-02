@@ -19,6 +19,8 @@
   --overlay: rgba(255, 255, 255, 0.06);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
   --radius: 14px;
+  --edge: #171b24;
+  --accent-edge: #2b5fbe;
 }
 
 [data-theme="light"] {
@@ -38,6 +40,8 @@
   --overlay: rgba(16, 20, 30, 0.05);
   --shadow: 0 18px 44px rgba(31, 41, 61, 0.14);
   --radius: 14px;
+  --edge: #c2cad7;
+  --accent-edge: #1b4fb8;
 }
 
 [data-theme="midnight"] {
@@ -57,6 +61,8 @@
   --overlay: rgba(255, 255, 255, 0.07);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
   --radius: 14px;
+  --edge: #171130;
+  --accent-edge: #7c5cd6;
 }
 
 [data-theme="sunset"] {
@@ -76,6 +82,8 @@
   --overlay: rgba(255, 255, 255, 0.07);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
   --radius: 14px;
+  --edge: #241618;
+  --accent-edge: #cc6236;
 }
 
 * {
@@ -753,6 +761,186 @@ body {
 /* Short screens: a 768px-tall laptop leaves roughly 670px of viewport, which
    the two taller keypads overrun. Spend the padding, the display's height and
    the footnote on the rows rather than making the card scroll. */
+/* --- 3D mode ---------------------------------------------------------------
+   Toggled from the appearance drawer, and driven entirely by an attribute on
+   <html> so nothing about the markup changes.
+
+   The perspective is written into each panel's own transform rather than set
+   on .app, deliberately: `perspective` and `transform` both make an element
+   the containing block for fixed-position descendants, and the theme button,
+   the backdrop and the drawer are all fixed elements living inside .app.
+   Tilting the parent would tear them off the viewport. Tilting the three
+   panels leaves them alone.
+
+   Transforms don't affect layout, so none of this can bring back the
+   scrolling the card was fitted to avoid. */
+[data-depth="on"] .calculator,
+[data-depth="on"] .fact,
+[data-depth="on"] .history {
+  transition: transform 0.35s ease, box-shadow 0.35s ease;
+}
+
+/* The side panels angle in towards the middle, like a small desk. */
+[data-depth="on"] .fact {
+  transform: perspective(1300px) rotateX(5deg) rotateY(11deg);
+}
+
+[data-depth="on"] .history {
+  transform: perspective(1300px) rotateX(5deg) rotateY(-11deg);
+}
+
+[data-depth="on"] .calculator {
+  transform: perspective(1500px) rotateX(7deg);
+  box-shadow: 0 40px 70px -20px rgba(0, 0, 0, 0.55), var(--shadow);
+}
+
+/* A lit top edge and a dark bottom one read as thickness. */
+[data-depth="on"] .calculator,
+[data-depth="on"] .fact,
+[data-depth="on"] .history {
+  border-top-color: var(--overlay);
+  border-bottom-color: var(--edge);
+}
+
+/* Keys stand on a visible side face, and pressing one puts it back down. */
+[data-depth="on"] .key {
+  box-shadow: 0 4px 0 var(--edge), 0 5px 9px rgba(0, 0, 0, 0.3);
+}
+
+[data-depth="on"] .key:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--edge), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-depth="on"] .key--equals {
+  box-shadow: 0 4px 0 var(--accent-edge), 0 5px 9px rgba(0, 0, 0, 0.3);
+}
+
+[data-depth="on"] .key--equals:active {
+  box-shadow: 0 0 0 var(--accent-edge), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* Keys with no resting background get no side face either -- a shadow under
+   something that isn't there is what makes a flat design look broken. */
+[data-depth="on"] .key--fn,
+[data-depth="on"] .key:disabled {
+  box-shadow: none;
+}
+
+[data-depth="on"] .key--fn:active,
+[data-depth="on"] .key:disabled:active {
+  transform: none;
+}
+
+/* The display and the readout sink into the card instead of standing on it. */
+[data-depth="on"] .display,
+[data-depth="on"] .readout {
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.35),
+    inset 0 -1px 0 var(--overlay);
+}
+
+/* The keypad gains a row of gaps in 3D, so the raised keys have somewhere to
+   sit rather than butting into each other. */
+[data-depth="on"] .keypad {
+  padding-bottom: 4px;
+}
+
+/* A tilt is a static arrangement, not an animation, so it stays. Sliding
+   into it on every toggle is the part worth dropping. */
+@media (prefers-reduced-motion: reduce) {
+  [data-depth="on"] .calculator,
+  [data-depth="on"] .fact,
+  [data-depth="on"] .history {
+    transition: none;
+  }
+}
+
+/* Stacked layout: the panels sit above one another, so angling them towards a
+   centre column that no longer exists would just look crooked. */
+@media (max-width: 980px) {
+  [data-depth="on"] .fact,
+  [data-depth="on"] .history,
+  [data-depth="on"] .calculator {
+    transform: perspective(1300px) rotateX(6deg);
+  }
+}
+
+/* The appearance drawer's 3D switch. */
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 13px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--panel-raised);
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.switch:hover {
+  background: var(--key);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.switch[aria-checked="true"] {
+  border-color: var(--accent);
+}
+
+.switch__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.switch__name {
+  font-size: 15px;
+}
+
+.switch__hint {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.switch__track {
+  flex-shrink: 0;
+  width: 38px;
+  height: 22px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--key);
+  transition: background 0.16s ease;
+}
+
+.switch[aria-checked="true"] .switch__track {
+  background: var(--accent);
+}
+
+.switch__thumb {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+
+.switch[aria-checked="true"] .switch__thumb {
+  background: var(--on-accent);
+  transform: translateX(16px);
+}
+
 @media (max-height: 780px) {
   body {
     padding: 12px;

@@ -217,13 +217,30 @@ Clear is labelled `AC` in this mode, because `C` is a hex digit.
 Adding another mode means adding a key array and one entry to `MODES` in
 `static/app.jsx`.
 
-## Themes
+## Appearance
 
 Four themes ship with the app — **Dark**, **Light**, **Midnight**, and
 **Sunset**. The **Theme** button in the top-left corner opens a sidebar menu
 listing them by name; close it with the ×, the backdrop, or `Esc`. Your choice
 is saved in `localStorage`, and on a first visit the app follows your system's
 light/dark preference.
+
+Below the themes is a **3D** switch. Turned on, the three panels angle towards
+each other like a small desk, the keys stand on a visible side face and sink
+when pressed, and the display and readout are set into the card rather than
+laid on it. It is saved in `localStorage` alongside the theme and applied
+before the first paint, so it doesn't flash flat on reload.
+
+The whole effect is CSS hanging off a `data-depth="on"` attribute on `<html>`
+— the markup is identical either way. Two details are deliberate:
+
+- The perspective is written into each panel's own `transform` rather than set
+  once on `.app`. Both `perspective` and `transform` make an element the
+  containing block for fixed-position descendants, and the theme button, the
+  backdrop and the drawer are all fixed elements inside `.app` — tilting the
+  parent would tear them off the viewport.
+- Transforms don't affect layout, so 3D cannot bring back the scrolling the
+  card was fitted to avoid, and clicks land on the keys through the tilt.
 
 Every colour is a CSS custom property in `static/styles.css`, so adding a
 theme means adding one `[data-theme="..."]` block of tokens and one entry to

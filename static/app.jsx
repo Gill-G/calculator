@@ -25,6 +25,7 @@ const MODE_KEY = "calculator-mode";
 const ANGLE_KEY = "calculator-angle";
 const BASE_KEY = "calculator-base";
 const WIDTH_KEY = "calculator-width";
+const DEPTH_KEY = "calculator-depth";
 
 // The Node facts service runs beside the Python server, on its own port.
 // Derived from the current host so this still works over the network.
@@ -52,6 +53,15 @@ function readStoredTheme() {
     /* fall through to the default */
   }
   return "dark";
+}
+
+// The 3D switch is a plain on/off, so it reads back on its own.
+function readStoredDepth() {
+  try {
+    return localStorage.getItem(DEPTH_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
 }
 
 // Same guarded read as the theme, for the per-mode preferences.
@@ -373,17 +383,22 @@ function ThemeTrigger({ current, open, onToggle }) {
   );
 }
 
-function ThemeMenu({ theme, onChange, onClose }) {
+function ThemeMenu({ theme, onChange, depth, onDepthChange, onClose }) {
   return (
     <React.Fragment>
       <div className="backdrop" onClick={onClose} />
-      <aside className="drawer" role="dialog" aria-modal="true" aria-label="Theme">
+      <aside
+        className="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Appearance"
+      >
         <div className="drawer__head">
-          <h2 className="drawer__title">Theme</h2>
+          <h2 className="drawer__title">Appearance</h2>
           <button
             className="drawer__close"
             onClick={onClose}
-            aria-label="Close theme menu"
+            aria-label="Close appearance menu"
           >
             ×
           </button>
@@ -412,6 +427,20 @@ function ThemeMenu({ theme, onChange, onClose }) {
             </li>
           ))}
         </ul>
+        <button
+          className="switch"
+          role="switch"
+          aria-checked={depth}
+          onClick={() => onDepthChange(!depth)}
+        >
+          <span className="switch__text">
+            <span className="switch__name">3D</span>
+            <span className="switch__hint">Raised keys, tilted panels</span>
+          </span>
+          <span className="switch__track" aria-hidden="true">
+            <span className="switch__thumb" />
+          </span>
+        </button>
         <p className="drawer__note">The menu stays open so you can compare.</p>
       </aside>
     </React.Fragment>
@@ -628,6 +657,7 @@ function Calculator() {
   const [history, setHistory] = useState([]);
   const nextId = useRef(1);
   const [theme, setTheme] = useState(readStoredTheme);
+  const [depth, setDepth] = useState(readStoredDepth);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mode, setMode] = useState(() => readStored(MODE_KEY, MODES, "standard"));
   const [angle, setAngle] = useState(() => readStored(ANGLE_KEY, ANGLES, "deg"));
@@ -679,6 +709,17 @@ function Calculator() {
       /* the theme still applies for this session */
     }
   }, [theme]);
+
+  // Driven by an attribute rather than a class, so the whole effect is CSS
+  // and the inline script in index.html can set it before the first paint.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-depth", depth ? "on" : "off");
+    try {
+      localStorage.setItem(DEPTH_KEY, depth ? "on" : "off");
+    } catch (err) {
+      /* the choice still applies for this session */
+    }
+  }, [depth]);
 
   useEffect(() => {
     try {
@@ -889,6 +930,8 @@ function Calculator() {
         <ThemeMenu
           theme={theme}
           onChange={setTheme}
+          depth={depth}
+          onDepthChange={setDepth}
           onClose={() => setMenuOpen(false)}
         />
       )}
