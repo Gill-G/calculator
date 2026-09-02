@@ -145,6 +145,33 @@ Results land in the history panel — click any entry to reuse its value.
 Programmer entries are tagged with the base they were typed in, since `1010`
 means four different things without it.
 
+## The answer variable
+
+The last result is kept as **Ans**. Once there is one, an `ANS` chip appears
+in the display next to the number; clicking it drops `Ans` into the
+expression, so `Ans × 2` picks up wherever the last calculation left off.
+
+Pressing `=` on a finished `Ans` calculation runs it again against the new
+answer, which is what makes it a loop rather than a one-off:
+
+```
+2 + 3 =      5
+Ans + 2 =    7
+=            9        each press adds 2 again
+=            11
+```
+
+`Ans` is substituted in the browser, wrapped in brackets so a negative answer
+can't glue itself to the operator in front of it — `3 − Ans` with an `Ans` of
+`-6` is sent as `3-(-6)`. The server never holds an answer, so two browsers
+pointed at the same port keep their own.
+
+The answer is stored in decimal whatever mode produced it and spelled into
+the active base when shown, so it survives a switch: an answer of `9` in
+decimal is the same `A` in hex. An answer with no whole-number form — `0.25`,
+say — simply has no chip in programmer mode, and the next result brings it
+back.
+
 ## Modes
 
 The switcher above the display picks the keypad. Your choice is saved in
@@ -153,7 +180,8 @@ unit control sits in the top-left of the display, where a pocket calculator
 puts the same indicator — which is also what keeps the tallest keypad on
 screen without scrolling on a laptop.
 
-**Standard** is the original four-function pad, plus `%`, `^`, `√` and brackets.
+**Standard** is the original four-function pad, plus `%`, `^`, `√` and
+brackets. The `ANS` chip in the display is shared by all three modes.
 
 **Scientific** keeps those digits and operators exactly where they were and
 stacks four rows of function keys on top: `sin` `cos` `tan` and their

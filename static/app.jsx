@@ -238,6 +238,11 @@ const WIDTHS = [
 
 const HEX_ALPHABET = "0123456789abcdef";
 
+// What the Ans key puts in the expression. It never reaches Python: the value
+// is substituted in before the request, so the backend stays stateless and
+// two browsers can't tread on each other's answer.
+const ANS_TOKEN = "Ans";
+
 // Keyboard character -> keypad label.
 const KEY_MAP = {
   "*": "×",
@@ -294,6 +299,25 @@ function basesOf(value, width) {
 // Nibbles, so a 32-bit pattern can be read rather than counted.
 function groupBits(bits) {
   return bits.replace(/\B(?=(.{4})+$)/g, " ");
+}
+
+// The last answer is kept as one decimal string whatever mode produced it,
+// and spelled into the active base only when it is shown or used. A single
+// canonical form is what keeps a mode or base switch from stranding an Ans
+// that means something else -- 255 and FF stay the same answer.
+//
+// null means there is no answer this mode can use: a float has no hex.
+function answerIn(answer, base, width) {
+  if (!answer) return null;
+  if (base === "dec") return answer;
+  const values = convertBases(answer, "dec", width);
+  return values ? values[base] : null;
+}
+
+// Parenthesised, so a negative answer cannot glue itself to the operator in
+// front of it -- `3 − Ans` with Ans of -6 has to read `3-(-6)`.
+function substituteAnswer(display, value) {
+  return display.split(ANS_TOKEN).join(`(${value})`);
 }
 
 // Function keys open a bracket they never close -- pressing √ then 25 leaves
@@ -442,7 +466,25 @@ function BaseReadout({ values, base, onBaseChange }) {
   );
 }
 
-function Display({ expression, hint, error, pending, units }) {
+// The retained answer, shown where a calculator shows its memory register and
+// clickable to drop `Ans` into the expression. It sits beside the big number
+// rather than above it, so the card gains no height from carrying it. Absent
+// until there is an answer -- and in programmer mode, absent again if that
+// answer has no whole-number form.
+function AnswerChip({ value, onInsert }) {
+  return (
+    <button
+      className="answer"
+      onClick={onInsert}
+      title={`Insert the last answer (${value})`}
+    >
+      <span className="answer__label">ANS</span>
+      <span className="answer__value">{value}</span>
+    </button>
+  );
+}
+
+function Display({ expression, hint, error, pending, units, answer, onInsertAnswer }) {
   const hintText = error || hint;
   return (
     <div className="display">
@@ -452,10 +494,13 @@ function Display({ expression, hint, error, pending, units }) {
           {hintText}
         </div>
       </div>
-      <div
-        className={"display__value" + (pending ? " display__value--pending" : "")}
-      >
-        {expression || "0"}
+      <div className="display__main">
+        {answer && <AnswerChip value={answer} onInsert={onInsertAnswer} />}
+        <div
+          className={"display__value" + (pending ? " display__value--pending" : "")}
+        >
+          {expression || "0"}
+        </div>
       </div>
     </div>
   );
@@ -549,6 +594,8 @@ function Calculator() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [settled, setSettled] = useState(false); // showing a finished result
+  const [answer, setAnswer] = useState(""); // last result, always in decimal
+  const [repeat, setRepeat] = useState(""); // an Ans expression "=" can re-run
   const [history, setHistory] = useState([]);
   const nextId = useRef(1);
   const [theme, setTheme] = useState(readStoredTheme);
@@ -561,6 +608,9 @@ function Calculator() {
   const activeMode = MODES.find((option) => option.id === mode) || MODES[0];
   const keys = activeMode.keys;
   const radix = BASE_RADIX[base];
+  // Standard and scientific work in plain decimal; only programmer varies.
+  const activeBase = activeMode.bases ? base : "dec";
+  const answerValue = answerIn(answer, activeBase, Number(width));
 
   // A key the active base has no digit for: shown, but not usable.
   const outOfBase = useCallback(
@@ -602,6 +652,7 @@ function Calculator() {
   const append = useCallback(
     (text) => {
       setError("");
+      setRepeat("");
       if (settled) {
         // After "=", typing a number starts over but an operator continues
         // from the result -- the way a pocket calculator behaves.
@@ -622,17 +673,33 @@ function Calculator() {
     setHint("");
     setError("");
     setSettled(false);
+    setRepeat("");
   }, []);
 
   const backspace = useCallback(() => {
     setError("");
     setSettled(false);
+    setRepeat("");
     setExpression((current) => current.slice(0, -1));
   }, []);
 
   const evaluate = useCallback(async () => {
-    const display = balanceParens(expression.trim());
+    // Pressing "=" on a finished result re-runs the expression behind it, so
+    // an Ans calculation can be stepped over and over: `Ans+2` then = = =.
+    // Without an Ans there is nothing to repeat, and "=" holds still rather
+    // than filing the same answer in the history again.
+    if (settled && !repeat) return;
+    const display = balanceParens((settled ? repeat : expression).trim());
     if (!display || pending) return;
+
+    const usesAnswer = display.includes(ANS_TOKEN);
+    if (usesAnswer && answerValue === null) {
+      setError("No answer to reuse yet");
+      return;
+    }
+    const resolved = usesAnswer
+      ? substituteAnswer(display, answerValue)
+      : display;
 
     setPending(true);
     setError("");
@@ -641,7 +708,7 @@ function Calculator() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          expression: toPython(display, activeMode.symbols || TO_PYTHON),
+          expression: toPython(resolved, activeMode.symbols || TO_PYTHON),
           mode,
           angle,
           base,
@@ -658,6 +725,13 @@ function Calculator() {
       setExpression(data.result);
       setHint(display + " =");
       setSettled(true);
+      // Stored in decimal whatever base produced it, so Ans survives a switch.
+      setAnswer(
+        activeMode.bases
+          ? (convertBases(data.result, base, Number(width)) || {}).dec || ""
+          : data.result
+      );
+      setRepeat(usesAnswer ? display : "");
       setHistory((entries) =>
         [
           {
@@ -675,7 +749,18 @@ function Calculator() {
     } finally {
       setPending(false);
     }
-  }, [activeMode, angle, base, expression, mode, pending, width]);
+  }, [
+    activeMode,
+    angle,
+    answerValue,
+    base,
+    expression,
+    mode,
+    pending,
+    repeat,
+    settled,
+    width,
+  ]);
 
   // Switching base re-spells whatever is on screen, the way a pocket
   // calculator does -- FF becomes 255 rather than an invalid-digit error.
@@ -688,6 +773,9 @@ function Calculator() {
         setError("");
         setExpression(expression.trim() ? values[next] : "");
       }
+      // The re-runnable expression is spelled in the old base; drop it rather
+      // than re-run something the display no longer shows.
+      setRepeat("");
     },
     [base, expression, width]
   );
@@ -707,6 +795,7 @@ function Calculator() {
       setError("");
       setHint("");
       setSettled(false);
+      setRepeat("");
       setExpression((current) => (settled ? result : current + result));
     },
     [settled]
@@ -770,10 +859,18 @@ function Calculator() {
           error={error}
           pending={pending}
           units={units}
+          answer={answerValue}
+          onInsertAnswer={() => append(ANS_TOKEN)}
         />
         {activeMode.bases && (
           <BaseReadout
-            values={convertBases(expression, base, Number(width))}
+            values={convertBases(
+              // A display holding just Ans reads out as the answer it stands
+              // for, rather than as an expression with no single value.
+              expression.trim() === ANS_TOKEN ? answerValue || "" : expression,
+              base,
+              Number(width)
+            )}
             base={base}
             onBaseChange={changeBase}
           />
