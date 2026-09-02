@@ -25,6 +25,7 @@ const MODE_KEY = "calculator-mode";
 const ANGLE_KEY = "calculator-angle";
 const BASE_KEY = "calculator-base";
 const WIDTH_KEY = "calculator-width";
+const DEPTH_KEY = "calculator-depth";
 
 // The Node facts service runs beside the Python server, on its own port.
 // Derived from the current host so this still works over the network.
@@ -52,6 +53,15 @@ function readStoredTheme() {
     /* fall through to the default */
   }
   return "dark";
+}
+
+// The 3D switch is a plain on/off, so it reads back on its own.
+function readStoredDepth() {
+  try {
+    return localStorage.getItem(DEPTH_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
 }
 
 // Same guarded read as the theme, for the per-mode preferences.
@@ -357,7 +367,7 @@ function balanceParens(display) {
 function ThemeTrigger({ current, open, onToggle }) {
   return (
     <button
-      className="theme-trigger"
+      className="trigger theme-trigger"
       onClick={onToggle}
       aria-expanded={open}
       aria-label="Theme menu"
@@ -369,6 +379,22 @@ function ThemeTrigger({ current, open, onToggle }) {
         }}
       />
       Theme
+    </button>
+  );
+}
+
+// The theme button's twin, sitting under it. Its chip is a miniature of what
+// the button does: flat when 3D is off, standing on a side face when it is on.
+function DepthTrigger({ depth, onToggle }) {
+  return (
+    <button
+      className="trigger depth-trigger"
+      onClick={onToggle}
+      aria-pressed={depth}
+      title={depth ? "Turn 3D off" : "Turn 3D on"}
+    >
+      <span className="depth-trigger__chip" aria-hidden="true" />
+      3D
     </button>
   );
 }
@@ -628,6 +654,7 @@ function Calculator() {
   const [history, setHistory] = useState([]);
   const nextId = useRef(1);
   const [theme, setTheme] = useState(readStoredTheme);
+  const [depth, setDepth] = useState(readStoredDepth);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mode, setMode] = useState(() => readStored(MODE_KEY, MODES, "standard"));
   const [angle, setAngle] = useState(() => readStored(ANGLE_KEY, ANGLES, "deg"));
@@ -679,6 +706,17 @@ function Calculator() {
       /* the theme still applies for this session */
     }
   }, [theme]);
+
+  // Driven by an attribute rather than a class, so the whole effect is CSS
+  // and the inline script in index.html can set it before the first paint.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-depth", depth ? "on" : "off");
+    try {
+      localStorage.setItem(DEPTH_KEY, depth ? "on" : "off");
+    } catch (err) {
+      /* the choice still applies for this session */
+    }
+  }, [depth]);
 
   useEffect(() => {
     try {
@@ -880,11 +918,14 @@ function Calculator() {
 
   return (
     <div className="app">
-      <ThemeTrigger
-        current={THEMES.find((option) => option.id === theme) || THEMES[0]}
-        open={menuOpen}
-        onToggle={() => setMenuOpen((open) => !open)}
-      />
+      <div className="controls">
+        <ThemeTrigger
+          current={THEMES.find((option) => option.id === theme) || THEMES[0]}
+          open={menuOpen}
+          onToggle={() => setMenuOpen((open) => !open)}
+        />
+        <DepthTrigger depth={depth} onToggle={() => setDepth((on) => !on)} />
+      </div>
       {menuOpen && (
         <ThemeMenu
           theme={theme}

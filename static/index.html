@@ -5,8 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Calculator</title>
     <script>
-      // Runs before first paint so a saved light theme doesn't flash dark.
+      // Runs before first paint so a saved light theme doesn't flash dark,
+      // and a saved 3D setting doesn't flash flat.
       (function () {
+        try {
+          if (localStorage.getItem("calculator-depth") === "on") {
+            document.documentElement.setAttribute("data-depth", "on");
+          }
+        } catch (e) {}
         try {
           var saved = localStorage.getItem("calculator-theme");
           if (saved) {
