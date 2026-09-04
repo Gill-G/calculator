@@ -1,0 +1,1371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="A walkthrough of the calculator codebase for someone new to software engineering: the three programs it runs as, the path a keypress takes, and the concepts behind each layer.">
+<style>
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>Inside the Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+:root{
+  --paper:#eeefe9; --surface:#f8f8f4; --sunk:#e4e5dd; --keycap:#dcded4;
+  --ink:#1a1e20; --ink-2:#4d5457; --ink-3:#7b8184;
+  --rule:#cbcdc3; --rule-soft:#dcded5;
+  --gold:#8f6410; --gold-bright:#b5811f; --gold-wash:rgba(181,129,31,.13);
+  --blue:#2a5a94; --blue-wash:rgba(42,90,148,.10);
+  --code-str:#3d6a38;
+  --shadow:0 1px 2px rgba(26,30,32,.07), 0 10px 28px rgba(26,30,32,.05);
+  --sans:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#15181a; --surface:#1d2124; --sunk:#111416; --keycap:#262b2e;
+    --ink:#e9eae4; --ink-2:#adb3b3; --ink-3:#7d8386;
+    --rule:#2f3539; --rule-soft:#242a2d;
+    --gold:#e0a63f; --gold-bright:#f0bd60; --gold-wash:rgba(224,166,63,.15);
+    --blue:#84acdf; --blue-wash:rgba(132,172,223,.15);
+    --code-str:#9cc78c;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px rgba(0,0,0,.32);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#15181a; --surface:#1d2124; --sunk:#111416; --keycap:#262b2e;
+  --ink:#e9eae4; --ink-2:#adb3b3; --ink-3:#7d8386;
+  --rule:#2f3539; --rule-soft:#242a2d;
+  --gold:#e0a63f; --gold-bright:#f0bd60; --gold-wash:rgba(224,166,63,.15);
+  --blue:#84acdf; --blue-wash:rgba(132,172,223,.15);
+  --code-str:#9cc78c;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px rgba(0,0,0,.32);
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:var(--serif); font-size:17px; line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+.page{max-width:1000px;margin:0 auto;padding:0 28px 96px}
+
+/* ---------- masthead ---------- */
+.masthead{padding:72px 0 0}
+.eyebrow{
+  font-family:var(--mono); font-size:.72rem; font-weight:500;
+  letter-spacing:.18em; text-transform:uppercase; color:var(--gold);
+  margin:0 0 22px;
+}
+h1{
+  font-family:var(--sans); font-weight:700;
+  font-size:clamp(2.7rem,7vw,4.4rem); line-height:.98;
+  letter-spacing:-.028em; margin:0; text-wrap:balance;
+}
+.deck{
+  font-size:1.22rem; line-height:1.6; color:var(--ink-2);
+  max-width:56ch; margin:24px 0 0;
+}
+.deck em{color:var(--ink);font-style:italic}
+
+.spec{
+  display:grid; grid-template-columns:repeat(4,1fr);
+  border-top:1px solid var(--ink); border-bottom:1px solid var(--rule);
+  margin:44px 0 0;
+}
+.spec div{padding:14px 18px 15px;border-left:1px solid var(--rule-soft)}
+.spec div:first-child{border-left:0;padding-left:0}
+.spec dt{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-3);margin:0 0 4px;
+}
+.spec dd{
+  margin:0;font-family:var(--sans);font-weight:600;font-size:1.05rem;
+  letter-spacing:-.01em;
+}
+.spec dd span{font-weight:500;color:var(--ink-3);font-size:.85rem}
+
+/* ---------- contents ---------- */
+.toc{margin:52px 0 0;border-bottom:1px solid var(--rule)}
+.toc h2{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--ink-3);font-weight:500;margin:0 0 4px;
+}
+.toc ol{list-style:none;margin:0;padding:0;
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 40px}
+.toc li{border-top:1px solid var(--rule-soft)}
+.toc a{
+  display:grid;grid-template-columns:2.6rem 1fr;gap:12px;
+  padding:11px 0;text-decoration:none;color:var(--ink);
+  font-family:var(--sans);font-size:.94rem;font-weight:500;
+}
+.toc a:hover{color:var(--gold)}
+.toc a b{font-family:var(--mono);font-weight:500;color:var(--ink-3);font-size:.82rem}
+.toc a:hover b{color:var(--gold)}
+
+/* ---------- sections ---------- */
+.section{
+  display:grid;grid-template-columns:64px minmax(0,1fr);gap:0 36px;
+  padding:64px 0 0;
+}
+.rail{position:relative}
+.rail span{
+  position:sticky;top:24px;display:block;
+  font-family:var(--mono);font-size:1.5rem;font-weight:500;
+  color:var(--rule);letter-spacing:-.03em;
+}
+h2.head{
+  font-family:var(--sans);font-weight:700;font-size:2rem;
+  letter-spacing:-.022em;margin:0 0 6px;line-height:1.12;text-wrap:balance;
+}
+.standfirst{
+  font-family:var(--mono);font-size:.74rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--gold);margin:0 0 26px;
+}
+.prose{max-width:64ch}
+.prose p{margin:0 0 1.15em}
+.prose p:last-child{margin-bottom:0}
+h3{
+  font-family:var(--sans);font-weight:600;font-size:1.16rem;
+  letter-spacing:-.012em;margin:38px 0 10px;
+}
+h3 .gloss{
+  display:block;font-family:var(--serif);font-style:italic;font-weight:400;
+  font-size:.95rem;color:var(--ink-3);letter-spacing:0;margin-top:1px;
+}
+strong{font-weight:600}
+.prose a{color:var(--blue)}
+
+/* the one term-emphasis device */
+.term{
+  font-family:var(--sans);font-weight:600;font-size:.94em;
+  color:var(--ink);background:var(--gold-wash);
+  padding:.06em .3em;border-radius:2px;
+}
+code{
+  font-family:var(--mono);font-size:.855em;
+  background:var(--sunk);padding:.1em .34em;border-radius:3px;
+  color:var(--ink);
+}
+kbd{
+  font-family:var(--mono);font-size:.82em;font-weight:500;
+  display:inline-block;min-width:1.9em;text-align:center;
+  background:var(--keycap);color:var(--ink);
+  border:1px solid var(--rule);border-bottom-width:3px;
+  border-radius:5px;padding:.1em .42em;line-height:1.35;
+  vertical-align:baseline;
+}
+
+/* ---------- code blocks ---------- */
+.snippet{margin:22px 0 26px;background:var(--sunk);border:1px solid var(--rule-soft);border-radius:4px;overflow:hidden}
+.snippet__head{
+  display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+  padding:9px 14px;border-bottom:1px solid var(--rule-soft);
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.06em;
+}
+.snippet__file{color:var(--ink);font-weight:600}
+.snippet__note{color:var(--ink-3);text-align:right}
+.snippet pre{margin:0;padding:14px;overflow-x:auto}
+.snippet code{
+  background:none;padding:0;font-size:.8rem;line-height:1.7;
+  display:block;white-space:pre;
+}
+.hljs-comment,.hljs-quote{color:var(--ink-3);font-style:italic}
+.hljs-keyword,.hljs-selector-tag,.hljs-literal,.hljs-tag,.hljs-name{color:var(--blue);font-weight:500}
+.hljs-string,.hljs-selector-class,.hljs-attribute{color:var(--code-str)}
+.hljs-number,.hljs-symbol,.hljs-meta{color:var(--gold-bright)}
+.hljs-title,.hljs-title.function_,.hljs-section{color:var(--ink);font-weight:600}
+.hljs-built_in,.hljs-type{color:var(--blue)}
+.hljs-params,.hljs-attr,.hljs-property,.hljs-variable{color:var(--ink-2)}
+
+/* ---------- figures ---------- */
+figure.fig{
+  margin:34px 0 30px;padding:22px 22px 16px;
+  background:var(--surface);border:1px solid var(--rule-soft);
+  border-radius:4px;box-shadow:var(--shadow);
+  overflow-x:auto;
+}
+figure.fig svg{display:block;width:100%;max-width:100%;height:auto;min-width:520px;color:var(--ink)}
+figure.fig figcaption{
+  margin-top:16px;padding-top:12px;border-top:1px solid var(--rule-soft);
+  font-size:.92rem;line-height:1.55;color:var(--ink-2);max-width:64ch;
+}
+figure.fig figcaption b{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.13em;
+  text-transform:uppercase;color:var(--gold);font-weight:500;
+  display:block;margin-bottom:3px;
+}
+.svg-box{fill:var(--surface);stroke:currentColor;stroke-width:1.25;opacity:1}
+.svg-box-sunk{fill:var(--sunk);stroke:var(--rule);stroke-width:1.25}
+.svg-title{font-family:var(--sans);font-weight:600;font-size:14px;fill:var(--ink)}
+.svg-mono{font-family:var(--mono);font-size:12px;fill:var(--ink-2)}
+.svg-tag{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;fill:var(--ink-3)}
+.svg-lbl{font-family:var(--mono);font-size:11.5px;fill:var(--gold)}
+.svg-flow{fill:none;stroke:var(--gold);stroke-width:1.6}
+.svg-thin{fill:none;stroke:currentColor;stroke-width:1.25;opacity:.75}
+.svg-num{font-family:var(--mono);font-size:11px;font-weight:600;fill:var(--gold)}
+
+/* ---------- callout ---------- */
+.note{
+  margin:26px 0;padding:16px 20px;border-left:3px solid var(--gold);
+  background:var(--gold-wash);border-radius:0 4px 4px 0;
+  font-size:.98rem;line-height:1.62;max-width:64ch;
+}
+.note b{font-family:var(--sans);font-weight:600}
+
+/* ---------- decision rule ---------- */
+.rule{list-style:none;margin:22px 0 26px;padding:0;max-width:64ch;
+  border-top:1px solid var(--ink)}
+.rule li{
+  display:flex;justify-content:space-between;align-items:baseline;gap:20px;
+  padding:12px 0;border-bottom:1px solid var(--rule-soft);
+}
+.rule li span{font-size:1rem}
+.rule li b{
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--gold);font-weight:500;flex:none;
+}
+.rule li b.rule__client{color:var(--blue)}
+
+/* ---------- glossary ---------- */
+.glossary{
+  margin:24px 0 0;columns:2;column-gap:44px;
+}
+.glossary div{break-inside:avoid;padding:12px 0;border-top:1px solid var(--rule-soft)}
+.glossary dt{font-family:var(--sans);font-weight:600;font-size:.98rem;margin:0 0 1px}
+.glossary dd{margin:0;font-size:.93rem;line-height:1.55;color:var(--ink-2)}
+
+/* ---------- try it ---------- */
+.try{list-style:none;margin:24px 0 0;padding:0;counter-reset:t}
+.try li{
+  counter-increment:t;padding:18px 0;border-top:1px solid var(--rule-soft);
+  display:grid;grid-template-columns:2rem 1fr;gap:16px;
+}
+.try li::before{
+  content:counter(t);font-family:var(--mono);font-size:.85rem;
+  color:var(--gold);padding-top:.3em;
+}
+.try h3{margin:0 0 4px;font-size:1.03rem}
+.try p{margin:0;font-size:.96rem;color:var(--ink-2);max-width:60ch}
+.try .snippet{margin:12px 0 0}
+
+footer.end{
+  margin-top:80px;padding-top:20px;border-top:1px solid var(--ink);
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);
+  display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
+}
+a:focus-visible,button:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+
+@media (max-width:860px){
+  body{font-size:16px}
+  .page{padding:0 20px 72px}
+  .spec{grid-template-columns:repeat(2,1fr)}
+  .spec div:nth-child(3){border-left:0;padding-left:0}
+  .spec div{border-top:1px solid var(--rule-soft)}
+  .spec div:nth-child(-n+2){border-top:0}
+  .toc ol{grid-template-columns:1fr}
+  .section{grid-template-columns:1fr;gap:0;padding-top:52px}
+  .rail span{position:static;font-size:.8rem;letter-spacing:.14em;color:var(--ink-3);margin-bottom:8px}
+  .glossary{columns:1}
+}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="masthead">
+  <p class="eyebrow">Reading a codebase · Calculator</p>
+  <h1>Inside the Calculator</h1>
+  <p class="deck">Three small programs, running at once, that together make a keypad you can click. This takes the whole thing apart — <em>every layer, in the order a keypress travels through it.</em></p>
+  <dl class="spec">
+    <div><dt>Runs as</dt><dd>3 programs <span>browser · Python · Node</span></dd></div>
+    <div><dt>Written in</dt><dd>4 languages <span>JS · Python · CSS · HTML</span></dd></div>
+    <div><dt>Outside code</dt><dd>2 packages <span>express · cors</span></dd></div>
+    <div><dt>Size</dt><dd>2,612 lines <span>across 5 files</span></dd></div>
+  </dl>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#s0"><b>00</b><span>The map: three programs, two ports</span></a></li>
+    <li><a href="#s1"><b>01</b><span>One keypress, end to end</span></a></li>
+    <li><a href="#s2"><b>02</b><span>The browser half: React</span></a></li>
+    <li><a href="#s3"><b>03</b><span>The wire: HTTP and JSON</span></a></li>
+    <li><a href="#s4"><b>04</b><span>The Python half: parsing, not guessing</span></a></li>
+    <li><a href="#s5"><b>05</b><span>Programmer mode: bases and bits</span></a></li>
+    <li><a href="#s6"><b>06</b><span>Look and feel: one set of colours</span></a></li>
+    <li><a href="#s7"><b>07</b><span>What the app remembers</span></a></li>
+    <li><a href="#s8"><b>08</b><span>Why a server at all?</span></a></li>
+    <li><a href="#s9"><b>09</b><span>Vocabulary</span></a></li>
+    <li><a href="#s10"><b>10</b><span>Five things to try</span></a></li>
+  </ol>
+</nav>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <polygon points="0,1 10,5 0,9" fill="var(--gold)"></polygon>
+  </marker>
+  <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <polygon points="0,1 10,5 0,9" fill="currentColor"></polygon>
+  </marker>
+</defs></svg>
+
+<!-- ============ 00 ============ -->
+<section class="section" id="s0">
+  <div class="rail"><span>00</span></div>
+  <div>
+    <h2 class="head">The map: three programs, two ports</h2>
+    <p class="standfirst">What is actually running when you open the page</p>
+    <div class="prose">
+      <p>When you ran <code>./start.sh</code>, you did not start "the calculator". You started <strong>three separate programs</strong> that cooperate. Nothing in software makes you do it this way — someone decided to split the work, and the split is the first thing worth understanding.</p>
+
+      <p>A <span class="term">server</span> is just a program that starts up and then <em>waits</em>. It does nothing until a message arrives, answers it, and goes back to waiting. It never finishes, which is why your terminal appears to hang after you start one — that is the program doing its job.</p>
+
+      <p>A <span class="term">client</span> is whatever sends those messages. Here the client is your web browser. Browsers are enormous programs whose main skill is asking for files over a network and drawing whatever comes back.</p>
+
+      <p>Because two servers are running on one machine, they need a way to be told apart. That is a <span class="term">port</span> — a numbered door on your computer. Python holds door <code>8000</code>, Node holds door <code>3001</code>. <code>127.0.0.1</code> (also spelled <code>localhost</code>) means "this same machine", so <code>http://127.0.0.1:8000</code> reads as <em>door 8000, right here</em>.</p>
+    </div>
+
+    <figure class="fig">
+      <svg viewBox="0 0 880 400" role="img" aria-label="The browser talks to two servers: a Python server on port 8000 that serves the page and does the arithmetic, and a Node server on port 3001 that returns random facts.">
+        <rect class="svg-box" x="20" y="140" width="230" height="120" rx="4"></rect>
+        <text class="svg-tag" x="38" y="166">CLIENT</text>
+        <text class="svg-title" x="38" y="192">Your browser</text>
+        <text class="svg-mono" x="38" y="214" font-size="10.5">React app · app.jsx</text>
+        <text class="svg-mono" x="38" y="232" font-size="10.5">draws every pixel you see</text>
+
+        <rect class="svg-box" x="600" y="30" width="260" height="130" rx="4"></rect>
+        <text class="svg-tag" x="618" y="56">SERVER · PORT 8000</text>
+        <text class="svg-title" x="618" y="82">server.py</text>
+        <text class="svg-mono" x="618" y="104" font-size="10.5">Python, standard library only</text>
+        <text class="svg-mono" x="618" y="122" font-size="10.5">serves the page + does the maths</text>
+        <text class="svg-mono" x="618" y="140" font-size="10.5">451 lines</text>
+
+        <rect class="svg-box" x="600" y="250" width="260" height="110" rx="4"></rect>
+        <text class="svg-tag" x="618" y="276">SERVER · PORT 3001</text>
+        <text class="svg-title" x="618" y="302">facts-server.js</text>
+        <text class="svg-mono" x="618" y="324" font-size="10.5">Node + Express</text>
+        <text class="svg-mono" x="618" y="342" font-size="10.5">20 facts, one at random</text>
+
+        <path class="svg-flow" d="M 250 175 H 280 V 70 H 590" marker-end="url(#ar)"></path>
+        <text class="svg-lbl" x="440" y="42" text-anchor="middle">POST /api/calc</text>
+        <text class="svg-mono" x="440" y="58" text-anchor="middle" font-size="10.5">{"expression": "7*8"}</text>
+
+        <path class="svg-thin" d="M 600 120 H 300 V 185 H 260" marker-end="url(#ar2)"></path>
+        <text class="svg-mono" x="450" y="140" text-anchor="middle" font-size="10.5">200 OK  {"result": "56"}</text>
+
+        <path class="svg-flow" d="M 250 225 H 280 V 300 H 590" marker-end="url(#ar)"></path>
+        <text class="svg-lbl" x="440" y="290" text-anchor="middle">GET :3001/api/fact</text>
+
+        <path class="svg-thin" d="M 600 340 H 300 V 235 H 260" marker-end="url(#ar2)"></path>
+        <text class="svg-mono" x="450" y="360" text-anchor="middle" font-size="10.5">200 OK  {"fact": "Octopuses have three hearts…"}</text>
+      </svg>
+      <figcaption><b>Figure 1 · System</b>Gold arrows are questions the browser asks; thin arrows are the answers. Not drawn: the very first request. Typing the address sends <code>GET /</code> to port 8000, and Python replies with <code>index.html</code>, <code>styles.css</code> and <code>app.jsx</code> — that is how the client gets its code in the first place.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <p>Notice what this buys: the two servers know nothing about each other. Kill the Node one and the calculator still adds up — only the facts bubble notices, and it says so. That is <span class="term">loose coupling</span>, and it is the whole reason to split a program into pieces.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">start.sh</span><span class="snippet__note">running both at once</span></div>
+      <pre><code class="language-bash">node facts-server.js &amp;          # &amp; = run it in the background
+NODE_PID=$!                     # remember its process number
+trap 'kill $NODE_PID' EXIT INT TERM   # kill it when we exit
+
+python3 server.py               # this one holds the terminal</code></pre>
+    </div>
+    <div class="prose">
+      <p>A <span class="term">shell script</span> is a list of terminal commands in a file. This one starts Node in the background, notes its <em>process id</em>, and sets a <code>trap</code> — a promise to run <code>kill</code> whenever the script ends. Without that trap, Ctrl+C would stop Python and leave Node running invisibly, still holding port 3001.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 01 ============ -->
+<section class="section" id="s1">
+  <div class="rail"><span>01</span></div>
+  <div>
+    <h2 class="head">One keypress, end to end</h2>
+    <p class="standfirst">Following 7 <kbd>×</kbd> 8 <kbd>=</kbd> through all three programs</p>
+    <div class="prose">
+      <p>This is the single most useful thing to hold in your head. Everything else in the codebase is a detail hanging off one of these six stages.</p>
+    </div>
+
+    <figure class="fig">
+      <svg viewBox="0 0 880 400" role="img" aria-label="Six stages: keypress, state change, translate and send, parse into a tree, walk the tree, and display the answer.">
+        <rect class="svg-box" x="15" y="50" width="250" height="100" rx="4"></rect>
+        <circle cx="15" cy="50" r="0"></circle>
+        <text class="svg-num" x="29" y="74">1</text>
+        <text class="svg-tag" x="251" y="74" text-anchor="end">BROWSER</text>
+        <text class="svg-title" x="29" y="100">You press a key</text>
+        <text class="svg-mono" x="29" y="122" font-size="10.5">pressKey({label: "×"})</text>
+        <text class="svg-mono" x="29" y="138" font-size="10.5">→ append("×")</text>
+
+        <path class="svg-flow" d="M 265 100 H 299" marker-end="url(#ar)"></path>
+
+        <rect class="svg-box" x="305" y="50" width="250" height="100" rx="4"></rect>
+        <text class="svg-num" x="319" y="74">2</text>
+        <text class="svg-tag" x="541" y="74" text-anchor="end">BROWSER</text>
+        <text class="svg-title" x="319" y="100">The state changes</text>
+        <text class="svg-mono" x="319" y="122" font-size="10.5">setExpression("7×")</text>
+        <text class="svg-mono" x="319" y="138" font-size="10.5">React redraws the display</text>
+
+        <path class="svg-flow" d="M 555 100 H 589" marker-end="url(#ar)"></path>
+
+        <rect class="svg-box" x="595" y="50" width="250" height="100" rx="4"></rect>
+        <text class="svg-num" x="609" y="74">3</text>
+        <text class="svg-tag" x="831" y="74" text-anchor="end">BROWSER</text>
+        <text class="svg-title" x="609" y="100">Translate, then send</text>
+        <text class="svg-mono" x="609" y="122" font-size="10.5">toPython("7×8") → "7*8"</text>
+        <text class="svg-mono" x="609" y="138" font-size="10.5">fetch("/api/calc", …)</text>
+
+        <path class="svg-flow" d="M 720 150 V 224" marker-end="url(#ar)"></path>
+        <text class="svg-lbl" x="734" y="184">over HTTP</text>
+        <text class="svg-mono" x="734" y="200" font-size="10.5">to port 8000</text>
+
+        <rect class="svg-box" x="595" y="230" width="250" height="100" rx="4"></rect>
+        <text class="svg-num" x="609" y="254">4</text>
+        <text class="svg-tag" x="831" y="254" text-anchor="end">PYTHON</text>
+        <text class="svg-title" x="609" y="280">Text becomes a tree</text>
+        <text class="svg-mono" x="609" y="302" font-size="10.5">ast.parse("7*8")</text>
+        <text class="svg-mono" x="609" y="318" font-size="10.5">BinOp(Mult, 7, 8)</text>
+
+        <path class="svg-flow" d="M 589 280 H 557" marker-end="url(#ar)"></path>
+
+        <rect class="svg-box" x="305" y="230" width="250" height="100" rx="4"></rect>
+        <text class="svg-num" x="319" y="254">5</text>
+        <text class="svg-tag" x="541" y="254" text-anchor="end">PYTHON</text>
+        <text class="svg-title" x="319" y="280">The tree is walked</text>
+        <text class="svg-mono" x="319" y="302" font-size="10.5">_eval_node(tree) → 56</text>
+        <text class="svg-mono" x="319" y="318" font-size="10.5">format_number(56) → "56"</text>
+
+        <path class="svg-flow" d="M 299 280 H 267" marker-end="url(#ar)"></path>
+
+        <rect class="svg-box" x="15" y="230" width="250" height="100" rx="4"></rect>
+        <text class="svg-num" x="29" y="254">6</text>
+        <text class="svg-tag" x="251" y="254" text-anchor="end">BROWSER</text>
+        <text class="svg-title" x="29" y="280">The answer lands</text>
+        <text class="svg-mono" x="29" y="302" font-size="10.5">{"result": "56"} arrives</text>
+        <text class="svg-mono" x="29" y="318" font-size="10.5">setExpression("56")</text>
+      </svg>
+      <figcaption><b>Figure 2 · Round trip</b>Read left-to-right along the top, drop down the gold arrow, then right-to-left along the bottom. Stages 1–3 and 6 happen in your browser; 4 and 5 happen in Python. The browser never does the arithmetic — it does not even know that <code>×</code> means multiply until it rewrites the symbol in stage 3.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <p>Stage 3 is worth pausing on. The keypad shows <kbd>×</kbd> and <kbd>÷</kbd> because those are the symbols people read; Python only understands <code>*</code> and <code>/</code>. So the code keeps a <span class="term">lookup table</span> — a plain object mapping each display symbol to its Python spelling — and swaps them one character at a time on the way out.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/app.jsx</span><span class="snippet__note">lines 5–12, 269–274</span></div>
+      <pre><code class="language-javascript">const TO_PYTHON = {
+  "×": "*", "÷": "/", "−": "-", "^": "**", "√": "sqrt", "π": "pi",
+};
+
+function toPython(display, symbols) {
+  return display
+    .split("")                        // "7×8" → ["7", "×", "8"]
+    .map((ch) =&gt; symbols[ch] || ch)   // swap it, or keep it as-is
+    .join("");                        // back into one string → "7*8"
+}</code></pre>
+    </div>
+
+    <div class="prose">
+      <p><code>split</code>, <code>map</code> and <code>join</code> are the three verbs you will see over and over in JavaScript: take a list apart, do something to every item, put it back together. <code>symbols[ch] || ch</code> reads as "the replacement if there is one, otherwise the character unchanged" — <code>||</code> here is not really "or", it is "fall back to".</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section class="section" id="s2">
+  <div class="rail"><span>02</span></div>
+  <div>
+    <h2 class="head">The browser half: React</h2>
+    <p class="standfirst">988 lines of app.jsx, and the one idea underneath them</p>
+    <div class="prose">
+      <p>The old way to build a web page was to describe <em>changes</em>: find the display element, change its text, now disable that button. Every change was an instruction, and you had to keep track of which instructions had already run.</p>
+
+      <p><span class="term">React</span> replaces that with one rule: <strong>you describe what the screen should look like for a given set of facts, and React works out the changes for you.</strong> The facts are called <span class="term">state</span>. Change the state and React re-runs your description, compares it against what is on screen, and edits only the parts that differ.</p>
+    </div>
+
+    <figure class="fig">
+      <svg viewBox="0 0 700 215" role="img" aria-label="A cycle: state holds the expression, React re-runs the component, the screen matches the new state, and a keypress sets new state again.">
+        <rect class="svg-box" x="15" y="26" width="190" height="82" rx="4"></rect>
+        <text class="svg-tag" x="31" y="48">STATE</text>
+        <text class="svg-title" x="31" y="72">The facts</text>
+        <text class="svg-mono" x="31" y="94" font-size="10.5">expression = "7×"</text>
+
+        <path class="svg-flow" d="M 205 67 H 249" marker-end="url(#ar)"></path>
+
+        <rect class="svg-box" x="255" y="26" width="190" height="82" rx="4"></rect>
+        <text class="svg-tag" x="271" y="48">RENDER</text>
+        <text class="svg-title" x="271" y="72">The description</text>
+        <text class="svg-mono" x="271" y="94" font-size="10.5">Calculator() runs</text>
+
+        <path class="svg-flow" d="M 445 67 H 489" marker-end="url(#ar)"></path>
+
+        <rect class="svg-box" x="495" y="26" width="190" height="82" rx="4"></rect>
+        <text class="svg-tag" x="511" y="48">SCREEN</text>
+        <text class="svg-title" x="511" y="72">The result</text>
+        <text class="svg-mono" x="511" y="94" font-size="10.5">&lt;div&gt;7×&lt;/div&gt;</text>
+
+        <path class="svg-thin" d="M 590 108 V 162 H 110 V 112" marker-end="url(#ar2)"></path>
+        <text class="svg-mono" x="350" y="182" text-anchor="middle" font-size="11">you press 8  →  setExpression("7×8")  →  round the loop again</text>
+      </svg>
+      <figcaption><b>Figure 3 · The React loop</b>Nothing in the code ever says "update the display". It says what the display <em>is</em>, and calls <code>setExpression</code> when the facts change. Everything else is React's problem.</figcaption>
+    </figure>
+
+    <h3>Components<span class="gloss">a function that returns a piece of screen</span></h3>
+    <div class="prose">
+      <p>A React app is built from functions that return markup. <code>app.jsx</code> defines nine of them — <code>Display</code>, <code>History</code>, <code>ThemeMenu</code>, <code>FactBubble</code> and so on — plus <code>Calculator</code>, which assembles the rest. Values passed <em>into</em> a component are called <span class="term">props</span>, and they only ever flow downward: a parent tells a child what to show, never the reverse.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/app.jsx</span><span class="snippet__note">lines 521–532 · a small component in full</span></div>
+      <pre><code class="language-javascript">function AnswerChip({ value, onInsert }) {     // ← two props
+  return (
+    &lt;button className="answer" onClick={onInsert}
+            title={`Insert the last answer (${value})`}&gt;
+      &lt;span className="answer__label"&gt;ANS&lt;/span&gt;
+      &lt;span className="answer__value"&gt;{value}&lt;/span&gt;
+    &lt;/button&gt;
+  );
+}</code></pre>
+    </div>
+    <div class="prose">
+      <p>That HTML-looking syntax inside a JavaScript function is <span class="term">JSX</span>. Browsers cannot read it, so something must translate it into ordinary JavaScript first. Most projects do that translation ahead of time with a build step. This one skips the build entirely: <code>index.html</code> loads Babel from a CDN and translates <code>app.jsx</code> in the browser, every page load. Slower, but it means there is nothing to install and nothing to recompile after an edit.</p>
+      <p>The curly braces are the escape hatch back into JavaScript: <code>{value}</code> means "put the value of this variable here". <code>onClick={onInsert}</code> hands the button a function to call later — the function itself, not its result, which is why there are no parentheses after it.</p>
+    </div>
+
+    <h3>State and hooks<span class="gloss">the facts a component remembers between renders</span></h3>
+    <div class="prose">
+      <p>A component function runs from scratch on every render, so ordinary variables inside it are forgotten each time. <code>useState</code> is how a value survives. It is one of React's <span class="term">hooks</span> — functions whose names start with <code>use</code> that plug a component into React's machinery.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/app.jsx</span><span class="snippet__note">lines 647–662 · everything the calculator remembers</span></div>
+      <pre><code class="language-javascript">const [expression, setExpression] = useState("");   // what's on the display
+const [hint, setHint]       = useState("");         // the small line above it
+const [error, setError]     = useState("");         // a problem to show
+const [pending, setPending] = useState(false);      // waiting on the server?
+const [settled, setSettled] = useState(false);      // showing a finished result
+const [answer, setAnswer]   = useState("");         // last result, in decimal
+const [history, setHistory] = useState([]);         // the last 25 sums
+const [theme, setTheme]     = useState(readStoredTheme);
+const [mode, setMode]       = useState(() =&gt; readStored(MODE_KEY, MODES, "standard"));</code></pre>
+    </div>
+    <div class="prose">
+      <p>Each line hands back a pair: the current value, and the only function allowed to change it. <code>const [a, b] = ...</code> is <span class="term">destructuring</span> — pulling two items out of a returned array in one line. The names are yours to choose; <code>setX</code> is convention, not a rule.</p>
+      <p>Read that list as a specification. Those nine facts, plus a handful of settings, <em>are</em> the calculator. Everything on screen is derived from them.</p>
+    </div>
+
+    <h3>Effects<span class="gloss">work that has to happen outside the render</span></h3>
+    <div class="prose">
+      <p>Rendering is supposed to be pure description. Saving to disk, listening for keystrokes, calling a server — that all has to happen somewhere else, and <code>useEffect</code> is that somewhere. It takes a function and a list of values to watch; when one of those values changes, the function runs again.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/app.jsx</span><span class="snippet__note">lines 701–708</span></div>
+      <pre><code class="language-javascript">useEffect(() =&gt; {
+  document.documentElement.setAttribute("data-theme", theme);
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch (err) {
+    /* the theme still applies for this session */
+  }
+}, [theme]);          // ← re-run this only when `theme` changes</code></pre>
+    </div>
+    <div class="prose">
+      <p>The keyboard listener (lines 885–916) uses the same tool with an important addition: it <em>returns</em> a function. React calls that returned function to clean up before re-running the effect, so the old listener is removed before a new one is added. Forgetting that is one of the classic memory leaks in React code.</p>
+    </div>
+
+    <h3>Data-driven interfaces<span class="gloss">describe the buttons, don't write them out</span></h3>
+    <div class="prose">
+      <p>The three keypads hold 24, 40 and 32 buttons. None of them is written out as markup. Each keypad is an <em>array of plain objects</em>, and one loop turns any of those arrays into buttons.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/app.jsx</span><span class="snippet__note">lines 80–104, 962–975 · data, then the single loop that renders it</span></div>
+      <pre><code class="language-javascript">const STANDARD_KEYS = [
+  { label: "C", type: "fn", action: "clear" },
+  { label: "⌫", type: "fn", action: "backspace", aria: "Backspace" },
+  { label: "7" },
+  { label: "×", type: "op" },
+  { label: "√", type: "op", insert: "√(" },   // shows √, types "√("
+  { label: "=", type: "equals", action: "evaluate" },
+];
+
+// …and one loop renders whichever array the active mode points at:
+{keys.map((key) =&gt; (
+  &lt;button
+    key={key.label}
+    className={"key" + (key.type ? " key--" + key.type : "")}
+    onClick={() =&gt; pressKey(key)}
+    disabled={outOfBase(key) || (key.action === "evaluate" &amp;&amp; !expression)}
+    aria-label={key.aria || key.label}
+  &gt;
+    {key.label}
+  &lt;/button&gt;
+))}</code></pre>
+    </div>
+    <div class="prose">
+      <p>This is <span class="term">separating data from behaviour</span>, and it is the difference between a codebase that grows well and one that does not. Adding a whole fourth mode means writing one more array and one more line in <code>MODES</code>. Nothing that <em>draws</em> anything has to change.</p>
+      <p>Note <code>aria-label</code>. The button reads <code>⌫</code> visually, which a screen reader would announce as nothing useful, so the code supplies "Backspace" instead. Accessibility attributes like this appear throughout the file — <code>role="tablist"</code>, <code>aria-pressed</code>, <code>aria-modal</code> — and they cost almost nothing to write while the component is being written.</p>
+    </div>
+
+    <div class="note"><b>A rule you can carry anywhere:</b> when you find yourself writing nearly-identical code a fourth time, the repetition is data in disguise. Pull the differences into a list, and write the shared part once.</div>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section class="section" id="s3">
+  <div class="rail"><span>03</span></div>
+  <div>
+    <h2 class="head">The wire: HTTP and JSON</h2>
+    <p class="standfirst">How two programs that share no memory manage to talk</p>
+    <div class="prose">
+      <p>The browser and Python are separate programs. They share no variables. Everything one tells the other has to be flattened into text, sent down a socket, and rebuilt on the far side. Two conventions make that bearable.</p>
+
+      <p><span class="term">HTTP</span> is the request-and-answer format. A request names a <em>method</em> (<code>GET</code> to fetch something, <code>POST</code> to send something), a <em>path</em> (<code>/api/calc</code>), some <em>headers</em> (notes about the message), and optionally a <em>body</em>. The answer carries a status code: <code>200</code> means fine, <code>400</code> means "your request was wrong", <code>404</code> means "no such thing here", <code>500</code> means the server broke.</p>
+
+      <p><span class="term">JSON</span> is the way values are written down as text. Objects, arrays, strings, numbers, true/false/null. Both languages can turn their native values into JSON and back, which is why a Python dictionary can arrive in JavaScript as an object without either side knowing the other exists.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/app.jsx</span><span class="snippet__note">lines 784–831, abridged · the browser's side of the conversation</span></div>
+      <pre><code class="language-javascript">setPending(true);                       // dim the display while we wait
+try {
+  const response = await fetch("/api/calc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({              // JS object → text
+      expression: toPython(resolved, activeMode.symbols || TO_PYTHON),
+      mode, angle, base, width: Number(width),
+    }),
+  });
+  const data = await response.json();   // text → JS object
+
+  if (!response.ok) {                   // a 400 still "arrived" successfully
+    setError(data.error || "Could not calculate that");
+    return;
+  }
+  setExpression(data.result);
+} catch (err) {
+  setError("Cannot reach the server");  // no reply at all
+} finally {
+  setPending(false);                    // runs either way
+}</code></pre>
+    </div>
+
+    <h3>Asynchrony<span class="gloss">work that finishes later, without freezing everything else</span></h3>
+    <div class="prose">
+      <p>A network round trip takes milliseconds at best and forever at worst. If the browser simply waited, the whole page would lock up. So <code>fetch</code> returns immediately with a <span class="term">promise</span> — a placeholder for a value that has not arrived yet.</p>
+      <p><code>await</code> means "pause <em>this</em> function here until the promise resolves, and let everything else carry on". It is a marker of a function declared <code>async</code>. This is why the code reads top-to-bottom like ordinary sequential logic while behaving nothing like it.</p>
+      <p>The three-way split matters. <code>try</code> holds the hopeful path. <code>catch</code> catches the case where no answer came back at all — server down, network gone. And <code>finally</code> runs no matter which of those happened, which is the only safe place to clear <code>pending</code>; put it in <code>try</code> and a failed request leaves the display dimmed forever.</p>
+      <p>Note that a <code>400</code> response does <em>not</em> reach <code>catch</code>. The message arrived perfectly — it just says no. That distinction, between "the conversation failed" and "the answer was no", trips up nearly everyone once.</p>
+    </div>
+
+    <h3>Same origin, and why the facts service needs CORS</h3>
+    <div class="prose">
+      <p>The calculator posts to <code>/api/calc</code> with no host in front of it, because the page itself came from port 8000 — same <span class="term">origin</span>, so the browser allows it without ceremony.</p>
+      <p>The facts service is on port 3001. Different port means different origin, and browsers block those requests by default to stop a malicious page from quietly reading another site's data. The fix is that the <em>receiving</em> server must say it does not mind. That is what one line of <code>facts-server.js</code> does.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">facts-server.js</span><span class="snippet__note">lines 33–46 · an entire web service</span></div>
+      <pre><code class="language-javascript">const app = express();
+app.use(cors());     // "any origin may call me" — this is the permission
+
+app.get("/api/fact", (req, res) =&gt; {
+  const index = Math.floor(Math.random() * FACTS.length);
+  res.json({ fact: FACTS[index], index, total: FACTS.length });
+});
+
+app.listen(PORT, "127.0.0.1", () =&gt; { … });</code></pre>
+    </div>
+    <div class="prose">
+      <p><span class="term">Express</span> is a <em>framework</em>: a library that supplies the boring parts of being a web server so you only write the interesting parts. <code>app.get(path, handler)</code> registers a function to run when that path is requested; <code>req</code> is the incoming request, <code>res</code> is the reply you are building. Along with <code>cors</code>, these are the only two pieces of third-party code in the entire project.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section class="section" id="s4">
+  <div class="rail"><span>04</span></div>
+  <div>
+    <h2 class="head">The Python half: parsing, not guessing</h2>
+    <p class="standfirst">Turning the string "2 + 3 * 4" into the number 14</p>
+    <div class="prose">
+      <p>Here is the honest problem. Python hands you <code>"2 + 3 * 4"</code>: nine characters. It is not maths yet. It is text that happens to look like maths, and something has to work out that the multiplication binds tighter than the addition.</p>
+
+      <p>Python ships with a function that would do the whole job in one line: <code>eval("2 + 3 * 4")</code> returns 14. It is also the single most dangerous function in the language, because it will run <em>anything</em>. <code>__import__("os").system("rm -rf ~")</code> is a perfectly valid expression. On a server that accepts strings from strangers, <code>eval</code> hands them your machine.</p>
+
+      <p>So this codebase does something better. It uses Python's <span class="term">parser</span> to turn the text into a structure, and then walks that structure itself — deciding, node by node, whether each thing is allowed.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">server.py</span><span class="snippet__note">lines 125–130</span></div>
+      <pre><code class="language-python">try:
+    tree = ast.parse(expression, mode="eval")   # text → structure
+except SyntaxError:
+    raise CalculationError("Invalid expression")
+
+value = _eval_node(tree.body, functions)        # structure → number</code></pre>
+    </div>
+
+    <div class="prose">
+      <p>An <span class="term">AST</span> — abstract syntax tree — is what a parser produces: the same expression, arranged so its structure is explicit. Precedence stops being a rule to remember and becomes a shape. The multiplication is <em>lower down the tree</em>, so it necessarily happens first.</p>
+    </div>
+
+    <figure class="fig">
+      <svg viewBox="0 0 720 348" role="img" aria-label="The expression 2 + 3 * 4 as a tree: an Add node whose left child is the constant 2 and whose right child is a Mult node over the constants 3 and 4.">
+        <text class="svg-mono" x="20" y="26">ast.parse("2 + 3 * 4") builds this:</text>
+        <text class="svg-lbl" x="360" y="46" text-anchor="middle">returns 14</text>
+
+        <path class="svg-thin" d="M 360 102 L 170 168"></path>
+        <path class="svg-thin" d="M 360 102 L 530 168"></path>
+        <path class="svg-thin" d="M 530 212 L 440 278"></path>
+        <path class="svg-thin" d="M 530 212 L 620 278"></path>
+
+        <rect class="svg-box" x="285" y="58" width="150" height="44" rx="4"></rect>
+        <text class="svg-title" x="360" y="78" text-anchor="middle">BinOp</text>
+        <text class="svg-mono" x="360" y="94" text-anchor="middle" font-size="11">op = Add  (+)</text>
+
+        <rect class="svg-box" x="105" y="168" width="130" height="44" rx="4"></rect>
+        <text class="svg-title" x="170" y="188" text-anchor="middle">Constant</text>
+        <text class="svg-mono" x="170" y="204" text-anchor="middle" font-size="11">value = 2</text>
+
+        <rect class="svg-box" x="455" y="168" width="150" height="44" rx="4"></rect>
+        <text class="svg-title" x="530" y="188" text-anchor="middle">BinOp</text>
+        <text class="svg-mono" x="530" y="204" text-anchor="middle" font-size="11">op = Mult  (*)</text>
+
+        <rect class="svg-box" x="380" y="278" width="120" height="44" rx="4"></rect>
+        <text class="svg-title" x="440" y="298" text-anchor="middle">Constant</text>
+        <text class="svg-mono" x="440" y="314" text-anchor="middle" font-size="11">value = 3</text>
+
+        <rect class="svg-box" x="560" y="278" width="120" height="44" rx="4"></rect>
+        <text class="svg-title" x="620" y="298" text-anchor="middle">Constant</text>
+        <text class="svg-mono" x="620" y="314" text-anchor="middle" font-size="11">value = 4</text>
+
+        <text class="svg-lbl" x="262" y="126" text-anchor="end">returns 2</text>
+        <text class="svg-lbl" x="452" y="126" text-anchor="start">returns 12</text>
+        <text class="svg-lbl" x="472" y="244" text-anchor="end">returns 3</text>
+        <text class="svg-lbl" x="590" y="244" text-anchor="start">returns 4</text>
+
+        <circle cx="277" cy="66" r="10" fill="var(--gold-wash)" stroke="var(--gold)" stroke-width="1.2"></circle>
+        <text class="svg-num" x="277" y="70" text-anchor="middle">1</text>
+        <circle cx="97" cy="176" r="10" fill="var(--gold-wash)" stroke="var(--gold)" stroke-width="1.2"></circle>
+        <text class="svg-num" x="97" y="180" text-anchor="middle">2</text>
+        <circle cx="447" cy="176" r="10" fill="var(--gold-wash)" stroke="var(--gold)" stroke-width="1.2"></circle>
+        <text class="svg-num" x="447" y="180" text-anchor="middle">3</text>
+        <circle cx="372" cy="286" r="10" fill="var(--gold-wash)" stroke="var(--gold)" stroke-width="1.2"></circle>
+        <text class="svg-num" x="372" y="290" text-anchor="middle">4</text>
+        <circle cx="552" cy="286" r="10" fill="var(--gold-wash)" stroke="var(--gold)" stroke-width="1.2"></circle>
+        <text class="svg-num" x="552" y="290" text-anchor="middle">5</text>
+      </svg>
+      <figcaption><b>Figure 4 · The tree, and the walk</b>Gold circles are the order <code>_eval_node</code> is <em>called</em>: it starts at the top and works down. Gold labels are the order values come <em>back</em>: bottom-up. The <code>Mult</code> node cannot answer until its two children have, so 3 × 4 resolves before the addition ever gets its second number — precedence, enforced by shape rather than by a rule.</figcaption>
+    </figure>
+
+    <h3>Recursion<span class="gloss">a function that solves a problem by calling itself on a smaller piece</span></h3>
+    <div class="prose">
+      <p><code>_eval_node</code> is 45 lines long and evaluates expressions of any depth, because it never tries to handle a whole expression. It handles <em>one node</em>, and asks itself for the rest.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">server.py</span><span class="snippet__note">lines 139–184, abridged · the heart of the whole program</span></div>
+      <pre><code class="language-python">def _eval_node(node, functions):
+    if isinstance(node, ast.Constant):              # ← the base case
+        if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
+            raise CalculationError("Only numbers are allowed")
+        return node.value                           # a leaf: answer directly
+
+    if isinstance(node, ast.BinOp):                 # ← the recursive case
+        op = BIN_OPS.get(type(node.op))
+        if op is None:
+            raise CalculationError("Unsupported operator")
+        left = _eval_node(node.left, functions)     # ask myself about the left
+        right = _eval_node(node.right, functions)   # …and the right
+        if op is operator.pow and abs(right) &gt; MAX_EXPONENT:
+            raise CalculationError(f"Exponent must be within +/-{MAX_EXPONENT}")
+        try:
+            return op(left, right)                  # now combine the answers
+        except ZeroDivisionError:
+            raise CalculationError("Cannot divide by zero")
+
+    # …UnaryOp, Name and Call branches follow the same shape…
+
+    raise CalculationError("Invalid expression")    # ← anything else: refused</code></pre>
+    </div>
+    <div class="prose">
+      <p>Every recursive function needs two things, and both are visible here. A <span class="term">base case</span> that returns without recursing — a <code>Constant</code> is just a number, so it answers immediately. And a <span class="term">recursive case</span> that calls itself on something strictly smaller — the children of a node are always closer to the leaves than the node itself. Together they guarantee the process ends.</p>
+    </div>
+
+    <h3>Dispatch tables<span class="gloss">a dictionary standing in for a wall of if-statements</span></h3>
+    <div class="prose">
+      <p><code>BIN_OPS</code> is worth a look, because it is a trick you will reuse constantly. It maps node types to the functions that implement them.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">server.py</span><span class="snippet__note">lines 29–41</span></div>
+      <pre><code class="language-python">BIN_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+
+UNARY_OPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+CONSTANTS = {"pi": math.pi, "e": math.e, "tau": math.tau}</code></pre>
+    </div>
+    <div class="prose">
+      <p>Functions in Python are ordinary values: you can store one in a dictionary and call it later. So instead of seven <code>if</code> branches, there is one lookup. Supporting a new operator becomes a one-line change to a table, and — crucially — <strong>the table doubles as the security policy</strong>.</p>
+      <p><code>BIN_OPS.get(type(node.op))</code> returns <code>None</code> for anything not listed, and <code>None</code> raises. That is a <span class="term">whitelist</span>: allowed things are named explicitly, and everything else is refused by default. The opposite approach — blocking known-bad input — is a <em>blacklist</em>, and it fails the moment someone thinks of something you did not.</p>
+      <p>Try it. Send <code>__import__("os")</code> to this server and it reaches the <code>ast.Call</code> branch, finds <code>__import__</code> is not in the functions dictionary, and answers <code>{"error": "Unknown function"}</code>. Not because anyone thought to block it, but because nobody ever allowed it.</p>
+    </div>
+
+    <h3>Guarding the resources</h3>
+    <div class="prose">
+      <p>A valid, permitted expression can still be a weapon. <code>9 ** 9 ** 9</code> uses only whitelisted operators and would occupy the server for a very long time. Three constants near the top of the file cap that.</p>
+    </div>
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">server.py</span><span class="snippet__note">lines 93–97</span></div>
+      <pre><code class="language-python">MAX_EXPONENT = 1000          # keeps 9 ** 9 ** 9 from hanging the server
+MAX_EXPRESSION_LENGTH = 200
+MAX_FACTORIAL = 500          # 500! is already a 1135-digit number</code></pre>
+    </div>
+
+    <h3>Errors as a design decision</h3>
+    <div class="prose">
+      <p>The file defines one exception of its own, on line 25, with a one-line docstring that carries the entire rule:</p>
+    </div>
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">server.py</span><span class="snippet__note">lines 25–26</span></div>
+      <pre><code class="language-python">class CalculationError(Exception):
+    """Raised for anything the user can fix by editing their expression."""</code></pre>
+    </div>
+    <div class="prose">
+      <p>That sentence draws a line. Divide by zero, an unknown function, a bad exponent — all <code>CalculationError</code>, all caught in one place and returned as a <code>400</code> with a readable message. Anything <em>not</em> a <code>CalculationError</code> is a bug in the server, and is allowed to crash loudly rather than be dressed up as user error. Being deliberate about which failures are expected is most of what separates code that is pleasant to debug from code that is not.</p>
+    </div>
+
+    <div class="note"><b>The server is stateless.</b> It keeps nothing between requests — no memory of your last sum, no idea who you are. Every request carries everything needed to answer it. That is why <code>Ans</code> is substituted into the expression <em>in the browser</em> before sending (<code>app.jsx</code> line 350): two people using the calculator at once cannot tread on each other's answer, because there is no shared answer to tread on.</div>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section class="section" id="s5">
+  <div class="rail"><span>05</span></div>
+  <div>
+    <h2 class="head">Programmer mode: bases and bits</h2>
+    <p class="standfirst">Why −1 shows as FFFFFFFF, and how the code makes that happen</p>
+    <div class="prose">
+      <p>A <span class="term">base</span> is just how many digits you count with before rolling over. Base 10 uses ten (0–9). Base 2, <em>binary</em>, uses two, so counting goes 0, 1, 10, 11, 100. Base 16, <em>hexadecimal</em>, needs sixteen digits, so it borrows letters: after 9 comes A, B, C, D, E, F. The number does not change — <code>255</code>, <code>FF</code> and <code>11111111</code> are the same quantity written three ways.</p>
+
+      <p>Programmer mode has to solve a problem the other modes do not: Python's parser only reads decimal. <code>FF + 1</code> is a syntax error. The fix is a rewrite pass that runs <em>before</em> parsing.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">server.py</span><span class="snippet__note">lines 233, 257–272</span></div>
+      <pre><code class="language-python">TOKEN_RE = re.compile(r"[0-9A-Za-z_]+")   # a run of letters/digits = one number
+
+def _rewrite_literals(expression, radix):
+    digits = BASE_DIGITS[radix]
+
+    def replace(match):
+        token = match.group(0)
+        if any(ch not in digits for ch in token.lower()):
+            raise CalculationError(f"'{token}' is not a base-{radix} number")
+        return str(int(token, radix))     # "FF" with radix 16 → "255"
+
+    return TOKEN_RE.sub(replace, expression)   # "FF + 1" → "255 + 1"</code></pre>
+    </div>
+    <div class="prose">
+      <p><code>re</code> is <span class="term">regular expressions</span> — a small language for describing text patterns. <code>[0-9A-Za-z_]+</code> means "one or more characters from this set". <code>.sub()</code> finds every match and replaces it with whatever the <code>replace</code> function returns. By the time <code>ast.parse</code> sees the string, it is ordinary decimal, and the rest of the evaluator needs no idea that hexadecimal exists.</p>
+      <p>Note also <code>int(token, radix)</code>: converting text to a number in a given base is a built-in, and reaching for the standard library first is nearly always right.</p>
+    </div>
+
+    <h3>Two's complement<span class="gloss">how a fixed number of bits represents a negative number</span></h3>
+    <div class="prose">
+      <p>A real 32-bit register holds exactly 32 bits. There is no separate slot for a minus sign, so hardware uses a convention: <strong>the top bit means the value is negative, and a negative number is stored as its positive counterpart subtracted from the wrap-around point.</strong></p>
+    </div>
+
+    <figure class="fig">
+      <svg viewBox="0 0 800 278" role="img" aria-label="Eight bits, all set to 1, with place values 128 down to 1. Read as unsigned this is 255; because the top bit is set it is read as minus one, which prints as FF in hexadecimal.">
+        <text class="svg-tag" x="30" y="34">WHAT AN 8-BIT WORD ACTUALLY HOLDS</text>
+        <text class="svg-title" x="30" y="60">Every bit set to 1</text>
+
+        <text class="svg-tag" x="56" y="88" text-anchor="middle">128</text>
+        <text class="svg-tag" x="114" y="88" text-anchor="middle">64</text>
+        <text class="svg-tag" x="172" y="88" text-anchor="middle">32</text>
+        <text class="svg-tag" x="230" y="88" text-anchor="middle">16</text>
+        <text class="svg-tag" x="288" y="88" text-anchor="middle">8</text>
+        <text class="svg-tag" x="346" y="88" text-anchor="middle">4</text>
+        <text class="svg-tag" x="404" y="88" text-anchor="middle">2</text>
+        <text class="svg-tag" x="462" y="88" text-anchor="middle">1</text>
+
+        <rect x="30" y="100" width="52" height="56" rx="3" fill="var(--gold-wash)" stroke="var(--gold)" stroke-width="1.4"></rect>
+        <rect class="svg-box-sunk" x="88" y="100" width="52" height="56" rx="3"></rect>
+        <rect class="svg-box-sunk" x="146" y="100" width="52" height="56" rx="3"></rect>
+        <rect class="svg-box-sunk" x="204" y="100" width="52" height="56" rx="3"></rect>
+        <rect class="svg-box-sunk" x="262" y="100" width="52" height="56" rx="3"></rect>
+        <rect class="svg-box-sunk" x="320" y="100" width="52" height="56" rx="3"></rect>
+        <rect class="svg-box-sunk" x="378" y="100" width="52" height="56" rx="3"></rect>
+        <rect class="svg-box-sunk" x="436" y="100" width="52" height="56" rx="3"></rect>
+
+        <text class="svg-mono" x="56" y="136" text-anchor="middle" font-size="20" fill="var(--gold)">1</text>
+        <text class="svg-mono" x="114" y="136" text-anchor="middle" font-size="20">1</text>
+        <text class="svg-mono" x="172" y="136" text-anchor="middle" font-size="20">1</text>
+        <text class="svg-mono" x="230" y="136" text-anchor="middle" font-size="20">1</text>
+        <text class="svg-mono" x="288" y="136" text-anchor="middle" font-size="20">1</text>
+        <text class="svg-mono" x="346" y="136" text-anchor="middle" font-size="20">1</text>
+        <text class="svg-mono" x="404" y="136" text-anchor="middle" font-size="20">1</text>
+        <text class="svg-mono" x="462" y="136" text-anchor="middle" font-size="20">1</text>
+
+        <text class="svg-lbl" x="56" y="178" text-anchor="middle">sign bit</text>
+
+        <path class="svg-flow" d="M 496 128 H 516" marker-end="url(#ar)"></path>
+
+        <rect class="svg-box-sunk" x="524" y="74" width="256" height="132" rx="4"></rect>
+        <text class="svg-tag" x="546" y="106">BIN</text>
+        <text class="svg-mono" x="758" y="106" text-anchor="end" font-size="13">1111 1111</text>
+        <line x1="546" y1="122" x2="758" y2="122" stroke="var(--rule)" stroke-width="1"></line>
+        <text class="svg-tag" x="546" y="150">HEX</text>
+        <text class="svg-mono" x="758" y="150" text-anchor="end" font-size="13">FF</text>
+        <line x1="546" y1="166" x2="758" y2="166" stroke="var(--rule)" stroke-width="1"></line>
+        <text class="svg-tag" x="546" y="194">DEC</text>
+        <text class="svg-mono" x="758" y="194" text-anchor="end" font-size="13" fill="var(--gold)">−1</text>
+
+        <text class="svg-mono" x="30" y="228" font-size="12">read as plain digits, the pattern is 255 — but the top bit is set,</text>
+        <text class="svg-mono" x="30" y="248" font-size="12">so it means 255 − 256, which is −1.   _wrap(255, 8) → -1</text>
+      </svg>
+      <figcaption><b>Figure 5 · Two's complement</b>Only the decimal row shows a sign; the other three show the raw bit pattern, which is why <code>−1</code> reads as <code>FF</code>. The same rule at 32 bits gives <code>FFFFFFFF</code>. It also explains overflow: at 8 bits, <code>127 + 1</code> is <code>−128</code>, because the addition carried into the sign bit.</figcaption>
+    </figure>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">server.py</span><span class="snippet__note">lines 236–241 · four lines that implement the whole convention</span></div>
+      <pre><code class="language-python">def _wrap(value, width):
+    """Truncate to `width` bits and read the result back as signed."""
+    value &amp;= (1 &lt;&lt; width) - 1          # keep only the low `width` bits
+    if value &gt;= 1 &lt;&lt; (width - 1):      # top bit set?
+        value -= 1 &lt;&lt; width            # then it's negative
+    return value</code></pre>
+    </div>
+    <div class="prose">
+      <p><code>1 &lt;&lt; width</code> is a <span class="term">bit shift</span>: slide the number 1 left by that many places. At width 8 that is <code>100000000</code> in binary — 256. Subtract one and you get <code>11111111</code>, a mask of eight 1s. <code>&amp;</code> is bitwise AND, which keeps a bit only where both sides have it, so <code>value &amp;= mask</code> discards everything above the eighth bit. Shifting and masking is how nearly all bit manipulation is written, in every language.</p>
+      <p><code>_wrap</code> is called on the result of <em>every</em> operation in <code>_eval_int_node</code>, which is exactly what real hardware does — that is what makes the mode a faithful simulation of fixed-width arithmetic rather than just a base converter.</p>
+      <p>The frontend does the same conversion independently, so the four-base readout can update as you type without a server round trip. It uses <span class="term">BigInt</span> — note the <code>n</code> suffix on <code>1n</code> and <code>256n</code> — because ordinary JavaScript numbers lose precision past 53 bits and would silently corrupt 64-bit values.</p>
+    </div>
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/app.jsx</span><span class="snippet__note">lines 300–310 · the same idea in JavaScript</span></div>
+      <pre><code class="language-javascript">function basesOf(value, width) {
+  const span = 1n &lt;&lt; BigInt(width);
+  const bits = ((value % span) + span) % span;      // always land in 0…span-1
+  const signed = bits &gt;= span / 2n ? bits - span : bits;
+  return {
+    hex: bits.toString(16).toUpperCase(),
+    dec: signed.toString(10),                       // only this one is signed
+    oct: bits.toString(8),
+    bin: bits.toString(2),
+  };
+}</code></pre>
+    </div>
+    <div class="note"><b>Two implementations of one rule.</b> This is a real trade-off, honestly made. The duplication buys an instant readout as you type; the cost is that if the convention ever changes, two files have to change together. Recognising that cost — rather than pretending it isn't there — is the skill.</div>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section class="section" id="s6">
+  <div class="rail"><span>06</span></div>
+  <div>
+    <h2 class="head">Look and feel: one set of colours</h2>
+    <p class="standfirst">Four themes, 1,079 lines of CSS, and no colour written twice</p>
+    <div class="prose">
+      <p><span class="term">CSS</span> is the language that says how things look. Its central mechanic is the <em>selector</em>: name some elements, then set properties on them. The naïve way to build four themes is to write the whole stylesheet four times. This file writes it once.</p>
+      <p>The tool is a <span class="term">custom property</span> — a variable you define with <code>--name</code> and read with <code>var(--name)</code>. Every theme is a block that redefines the same twenty names.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/styles.css</span><span class="snippet__note">lines 4–86, abridged</span></div>
+      <pre><code class="language-css">:root, [data-theme="dark"] {
+  --bg: #10131a;   --panel: #191d27;  --key: #2a3140;
+  --accent: #4c8dff;  --text: #eef1f6;  --muted: #8b94a7;
+}
+[data-theme="light"] {
+  --bg: #e9edf4;   --panel: #ffffff;  --key: #e8ecf3;
+  --accent: #2f6fed;  --text: #161a22;  --muted: #6b7488;
+}
+[data-theme="midnight"] { --bg: #0d0a18;  --accent: #a78bfa;  /* … */ }
+[data-theme="sunset"]   { --bg: #1a1113;  --accent: #ff8a5b;  /* … */ }
+
+/* …and every rule below this point only ever names the variable: */
+.key { background: var(--key); color: var(--text); }</code></pre>
+    </div>
+    <div class="prose">
+      <p>Switching theme is therefore a single line of JavaScript — <code>setAttribute("data-theme", "sunset")</code> on the root element — and every rule in the file re-resolves. The <code>[data-theme="…"]</code> selector matches on an <span class="term">attribute</span>, which is the same mechanism that makes the 3D toggle work: <code>[data-depth="on"]</code> adds perspective transforms to three panels, and switching the attribute off removes them all at once.</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/styles.css</span><span class="snippet__note">lines 817–826, 883–888</span></div>
+      <pre><code class="language-css">[data-depth="on"] .fact       { transform: perspective(1300px) rotateX(5deg) rotateY(11deg); }
+[data-depth="on"] .history    { transform: perspective(1300px) rotateX(5deg) rotateY(-11deg); }
+[data-depth="on"] .calculator { transform: perspective(1500px) rotateX(7deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-depth="on"] .calculator, [data-depth="on"] .fact, [data-depth="on"] .history {
+    transition: none;
+  }
+}</code></pre>
+    </div>
+    <div class="prose">
+      <p>A <span class="term">media query</span> asks the browser a question about the current conditions and only applies its rules if the answer is yes. Most are about width — <code>@media (max-width: 720px)</code> is how the layout rearranges on a phone. But <code>prefers-reduced-motion</code> asks about a person: some users get motion sickness from animation and have said so in their operating system settings. Honouring that takes four lines.</p>
+    </div>
+
+    <h3>The flash-of-wrong-theme problem</h3>
+    <div class="prose">
+      <p>There is a subtle ordering bug lurking here, and <code>index.html</code> solves it in a way worth understanding. React cannot apply the saved theme until React has loaded, which is after the browser has already painted the page. A user who chose the light theme would see a flash of dark first.</p>
+      <p>So a tiny script runs <em>before</em> the stylesheet is even linked — the only JavaScript in the whole project that is not part of the app:</p>
+    </div>
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/index.html</span><span class="snippet__note">lines 7–29, abridged · runs before first paint</span></div>
+      <pre><code class="language-javascript">(function () {
+  try {
+    var saved = localStorage.getItem("calculator-theme");
+    if (saved) {
+      document.documentElement.setAttribute("data-theme", saved);
+      return;
+    }
+  } catch (e) {}
+  try {
+    if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+      document.documentElement.setAttribute("data-theme", "light");
+    }
+  } catch (e) {}
+})();</code></pre>
+    </div>
+    <div class="prose">
+      <p>Browsers execute scripts in the order they appear, and pause rendering while they do. Putting this one first means the attribute is set before a single pixel is drawn. The fallback chain is the polite one: your saved choice, then your operating system's preference, then the default.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section class="section" id="s7">
+  <div class="rail"><span>07</span></div>
+  <div>
+    <h2 class="head">What the app remembers</h2>
+    <p class="standfirst">Three kinds of memory, with three different lifespans</p>
+    <div class="prose">
+      <p>Working out <em>where</em> a piece of information lives, and how long it survives, is one of the real design questions in any program. This one has three answers.</p>
+
+      <p><strong>React state</strong> lasts until you refresh. The current expression, the history list, whether a request is in flight — all gone on reload, and that is correct. Nobody wants yesterday's half-typed sum.</p>
+
+      <p><strong><code>localStorage</code></strong> lasts until you clear your browser. It is a small store of text, per website, and the app keeps six keys there: theme, 3D on or off, mode, angle unit, base, word size. Preferences, not data.</p>
+
+      <p><strong>The server</strong> remembers nothing at all. Deliberately.</p>
+
+      <p>Every single read from <code>localStorage</code> in this codebase is wrapped in <code>try/catch</code>, and the reason is not paranoia:</p>
+    </div>
+
+    <div class="snippet">
+      <div class="snippet__head"><span class="snippet__file">static/app.jsx</span><span class="snippet__note">lines 42–56</span></div>
+      <pre><code class="language-javascript">function readStoredTheme() {
+  // localStorage throws outright in some privacy modes, so never trust it.
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (THEMES.some((theme) =&gt; theme.id === saved)) return saved;
+  } catch (err) {
+    /* fall through to the system preference */
+  }
+  try {
+    if (window.matchMedia("(prefers-color-scheme: light)").matches) return "light";
+  } catch (err) {
+    /* fall through to the default */
+  }
+  return "dark";
+}</code></pre>
+    </div>
+    <div class="prose">
+      <p>In some privacy settings, merely <em>touching</em> <code>localStorage</code> throws an error. Unguarded, that error would happen during the very first render and the page would show nothing at all. A blank screen because someone has strict cookie settings is a bad outcome for a preference nobody would miss.</p>
+      <p>The second check is just as important: <code>THEMES.some(...)</code> verifies the stored value is one of the four real themes. Stored data is <span class="term">untrusted input</span> — it could be left over from an older version, or edited by hand. Validating on the way in costs one line.</p>
+      <p>Notice the shape of the function, too. Try the best source, fall back, fall back again, and always return <em>something</em>. It cannot fail. Functions with no failure mode are much easier to build on than functions that might.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section class="section" id="s8">
+  <div class="rail"><span>08</span></div>
+  <div>
+    <h2 class="head">Why a server at all?</h2>
+    <p class="standfirst">The general rule, past this app and into every other one</p>
+    <div class="prose">
+      <p>Everything so far has described <em>how</em> this app is split. The harder question is why anything should be split at all — why not do all of it in <code>app.jsx</code> and be done? The answer has almost nothing to do with calculators, and it starts from one fact.</p>
+    </div>
+
+    <div class="note"><b>The client is not yours.</b> It runs on a stranger's machine, under their control. They can read every line of it, change any part of it, and lie to you about anything it says.</div>
+
+    <div class="prose">
+      <p>A web page is code you <em>sent someone</em>. They can open developer tools, edit a variable mid-flight, replay a request with different numbers, or skip your code entirely and call your server by hand with <code>curl</code>. Nothing written on the client is enforcement. It is a suggestion, politely followed by everyone who has no reason not to.</p>
+      <p>Draw the line where the machines change hands and the whole subject reorganises itself around it.</p>
+    </div>
+
+    <figure class="fig">
+      <svg viewBox="0 0 880 356" role="img" aria-label="A trust boundary between the client machine, where code, variables, keys and requests are all readable and editable, and the server, which holds the database, real prices, secret keys and the rules.">
+        <text class="svg-lbl" x="440" y="30" text-anchor="middle">TRUST BOUNDARY</text>
+        <path d="M 440 44 V 152" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="5 5" fill="none"></path>
+        <path d="M 440 278 V 348" stroke="var(--gold)" stroke-width="1.4" stroke-dasharray="5 5" fill="none"></path>
+
+        <rect class="svg-box" x="20" y="60" width="340" height="270" rx="4"></rect>
+        <text class="svg-tag" x="38" y="90">THEIR MACHINE — THE CLIENT</text>
+        <text class="svg-mono" x="38" y="112" font-size="11">readable · editable · fakeable</text>
+        <rect class="svg-box-sunk" x="38" y="126" width="304" height="40" rx="3"></rect>
+        <text class="svg-mono" x="54" y="151" font-size="11.5">your JavaScript, in full</text>
+        <rect class="svg-box-sunk" x="38" y="176" width="304" height="40" rx="3"></rect>
+        <text class="svg-mono" x="54" y="201" font-size="11.5">every variable, live</text>
+        <rect class="svg-box-sunk" x="38" y="226" width="304" height="40" rx="3"></rect>
+        <text class="svg-mono" x="54" y="251" font-size="11.5">any key you shipped to them</text>
+        <rect class="svg-box-sunk" x="38" y="276" width="304" height="40" rx="3"></rect>
+        <text class="svg-mono" x="54" y="301" font-size="11.5">the request, before it is sent</text>
+
+        <rect class="svg-box" x="520" y="60" width="340" height="270" rx="4"></rect>
+        <text class="svg-tag" x="538" y="90">YOUR MACHINE — THE SERVER</text>
+        <text class="svg-mono" x="538" y="112" font-size="11">the only part you control</text>
+        <rect class="svg-box-sunk" x="538" y="126" width="304" height="40" rx="3"></rect>
+        <text class="svg-mono" x="554" y="151" font-size="11.5">the database</text>
+        <rect class="svg-box-sunk" x="538" y="176" width="304" height="40" rx="3"></rect>
+        <text class="svg-mono" x="554" y="201" font-size="11.5">the real prices, the real balance</text>
+        <rect class="svg-box-sunk" x="538" y="226" width="304" height="40" rx="3"></rect>
+        <text class="svg-mono" x="554" y="251" font-size="11.5">the secret keys</text>
+        <rect class="svg-box-sunk" x="538" y="276" width="304" height="40" rx="3"></rect>
+        <text class="svg-mono" x="554" y="301" font-size="11.5">the rules that actually decide</text>
+
+        <path class="svg-flow" d="M 366 180 H 514" marker-end="url(#ar)"></path>
+        <text class="svg-mono" x="440" y="170" text-anchor="middle" font-size="11">a claim, not a fact</text>
+
+        <path class="svg-thin" d="M 514 250 H 366" marker-end="url(#ar2)"></path>
+        <text class="svg-mono" x="440" y="272" text-anchor="middle" font-size="11">the truth, or a refusal</text>
+      </svg>
+      <figcaption><b>Figure 6 · The trust boundary</b>The dashed line opens only where traffic crosses it. Everything on the left is inspectable and editable by whoever is holding the machine — so anything arriving from the left is a <em>claim</em>, and the server's job is to check it against something on the right.</figcaption>
+    </figure>
+
+    <h3>1 · Trust<span class="gloss">the client can lie, and eventually will</span></h3>
+    <div class="prose">
+      <p>Imagine a shop whose checkout page sends the server <code>{item: "laptop", price: 1299}</code>. Nothing stops a buyer editing that number to <code>1</code> before it leaves their browser. If the server charges what it was told, it just sold a laptop for a pound.</p>
+      <p>The fix is not to hide the field, obfuscate the code, or check the price in JavaScript first. It is to stop asking the client for the price at all.</p>
+    </div>
+
+    <figure class="fig">
+      <svg viewBox="0 0 880 320" role="img" aria-label="Two checkout designs. The first sends the price from the browser and is charged one pound. The second sends only the item id and the server looks up the real price of one thousand two hundred and ninety nine pounds.">
+        <text class="svg-tag" x="20" y="30">BROKEN — TRUSTS THE CLIENT'S NUMBER</text>
+        <rect class="svg-box" x="20" y="46" width="210" height="90" rx="4" opacity="0.6"></rect>
+        <text class="svg-tag" x="36" y="70">CLIENT</text>
+        <text class="svg-title" x="36" y="94">Checkout page</text>
+        <text class="svg-mono" x="36" y="114" font-size="10.5">sends item + price</text>
+        <path class="svg-thin" d="M 230 91 H 344" marker-end="url(#ar2)"></path>
+        <text class="svg-mono" x="287" y="79" text-anchor="middle" font-size="10.5">{item, price: 1}</text>
+        <rect class="svg-box" x="350" y="46" width="230" height="90" rx="4" opacity="0.6"></rect>
+        <text class="svg-tag" x="366" y="70">SERVER</text>
+        <text class="svg-title" x="366" y="94">Believes it</text>
+        <text class="svg-mono" x="366" y="114" font-size="10.5">charge(body.price)</text>
+        <path class="svg-thin" d="M 580 91 H 644" marker-end="url(#ar2)"></path>
+        <rect class="svg-box" x="650" y="46" width="210" height="90" rx="4" opacity="0.6"></rect>
+        <text class="svg-tag" x="666" y="70">RESULT</text>
+        <text class="svg-title" x="666" y="94">£1 charged</text>
+        <text class="svg-mono" x="666" y="114" font-size="10.5">one edited number</text>
+
+        <text class="svg-lbl" x="20" y="196">CORRECT — LOOKS IT UP SERVER-SIDE</text>
+        <rect class="svg-box" x="20" y="212" width="210" height="90" rx="4"></rect>
+        <text class="svg-tag" x="36" y="236">CLIENT</text>
+        <text class="svg-title" x="36" y="260">Checkout page</text>
+        <text class="svg-mono" x="36" y="280" font-size="10.5">sends the item only</text>
+        <path class="svg-flow" d="M 230 257 H 344" marker-end="url(#ar)"></path>
+        <text class="svg-mono" x="287" y="245" text-anchor="middle" font-size="10.5">{item}</text>
+        <rect class="svg-box" x="350" y="212" width="230" height="90" rx="4"></rect>
+        <text class="svg-tag" x="366" y="236">SERVER</text>
+        <text class="svg-title" x="366" y="260">Looks it up</text>
+        <text class="svg-mono" x="366" y="280" font-size="10.5">price = prices[item]</text>
+        <path class="svg-flow" d="M 580 257 H 644" marker-end="url(#ar)"></path>
+        <rect class="svg-box" x="650" y="212" width="210" height="90" rx="4"></rect>
+        <text class="svg-tag" x="666" y="236">RESULT</text>
+        <text class="svg-title" x="666" y="260">£1,299 charged</text>
+        <text class="svg-mono" x="666" y="280" font-size="10.5">nothing to edit</text>
+      </svg>
+      <figcaption><b>Figure 7 · One field, all the difference</b>The two designs are identical except for what the request carries. Removing <code>price</code> from the payload removes the attack, because the number is no longer something the client is <em>asked</em> for. The general move: never accept from the client anything you can look up yourself.</figcaption>
+    </figure>
+
+    <div class="prose">
+      <p>The same shape recurs everywhere. A game that submits its own score. A request that says <code>isAdmin: true</code>. A form claiming its own discount code was valid. In each case the client has been handed a decision that was never theirs to make.</p>
+      <p>Client-side validation is still worth writing — it tells someone their email is malformed without a round trip, and that is a real kindness. But it is <span class="term">user experience</span>, not <span class="term">enforcement</span>. You need both, for different reasons, and the classic beginner's mistake is building only the first.</p>
+      <p>The tell: a greyed-out button stops nobody. The request behind it can always be sent by hand.</p>
+    </div>
+
+    <h3>2 · Secrets<span class="gloss">anything you ship is public</span></h3>
+    <div class="prose">
+      <p>Every byte sent to a browser can be read. There is no hiding place — not minification, not obfuscation, and emphatically not an environment variable, which frontend build tools paste directly into the bundle they ship. This is one of the most common ways real credentials leak into the world.</p>
+      <p>So any operation that <em>requires</em> a secret has to happen where the secret lives. You cannot connect a browser straight to a database, because there is no password you could safely give it. Part of what a server is, is the thing that holds the keys and does the privileged work on the client's behalf.</p>
+    </div>
+
+    <h3>3 · Sharing<span class="gloss">clients are islands, and someone has to referee</span></h3>
+    <div class="prose">
+      <p>Two browsers cannot see each other. There is no mechanism by which the memory of one tab reaches another. So anything more than one person or one device must see needs a <strong>common place to meet</strong>: chat messages, a comment thread, a leaderboard, a document two people edit at once, a history that follows you from laptop to phone.</p>
+      <p>And it is not only storage — it is <span class="term">arbitration</span>. When two people book seat 14A in the same instant, something has to decide who got it. That requires a single point of authority. It cannot be settled between two clients that cannot even perceive one another.</p>
+    </div>
+
+    <h3>4 · Durability<span class="gloss">client storage is a promise, not a guarantee</span></h3>
+    <div class="prose">
+      <p>As chapter 07 showed, this app keeps its preferences in <code>localStorage</code>. That store vanishes when someone clears their browser, opens a private window, exceeds a quota, switches device, or loses the laptop. Losing a theme choice is nothing. Losing two years of someone's writing is not. If the data mattering means you cannot lose it, it cannot live only on the client.</p>
+    </div>
+
+    <h3>5 · Capability<span class="gloss">some things a browser simply cannot do</span></h3>
+    <div class="prose">
+      <p>Send an email. Charge a card. Reach a printer, or another machine on a private network. Run work too heavy for a phone. Search two hundred gigabytes of data — you send the query <em>to</em> the data, you do not ship the data to every visitor. Browsers are also deliberately sandboxed: no raw sockets, no filesystem, cross-origin requests blocked by default. Sometimes a server exists for no reason other than being a proxy that is not subject to those rules.</p>
+    </div>
+
+    <h3>6 · You cannot force an update<span class="gloss">the client is always a stale copy</span></h3>
+    <div class="prose">
+      <p>Someone may have a tab open from last Tuesday, or a phone app three versions behind because they never updated it. So anything that must change <em>now, for everybody</em> — a price, a fraud rule, a feature you need to switch off — belongs on the server, where one deploy reaches everyone at once. This is also why APIs need versioning: old clients keep calling you long after you stopped thinking about them.</p>
+    </div>
+
+    <h3>The other direction</h3>
+    <div class="prose">
+      <p>All of which could read as an argument for putting everything on the server. It is not. Some work genuinely belongs on the client, and the industry has moved that way hard.</p>
+      <p><strong>Anything that must feel instant.</strong> No round trip competes with local. Dragging, typing, filtering a list you already hold.</p>
+      <p><strong>Offline.</strong> An app that dies without a network is useless on a plane, in a tunnel, or in a hospital basement.</p>
+      <p><strong>Privacy as a feature.</strong> In end-to-end encrypted messaging the encryption is client-side <em>precisely so the server cannot read it</em>. Sometimes not sending the data is the entire product.</p>
+      <p><strong>Cost.</strong> Work done on the user's processor is free to you, and scales to as many users as you have without you doing anything.</p>
+      <p>The mature pattern is doing the same thing in <strong>both</strong> places, for different reasons: validate on the client for speed and on the server for truth; update the screen optimistically, then reconcile with what the server says actually happened.</p>
+    </div>
+
+    <h3>The decision, in six questions</h3>
+    <div class="prose"><p>For each piece of work in an application, ask in order. The first "yes" settles it.</p></div>
+    <ol class="rule">
+      <li><span>Does it need a secret?</span><b>server</b></li>
+      <li><span>Does anyone else need to see the result?</span><b>server</b></li>
+      <li><span>Does it matter if the user lies about it?</span><b>server</b></li>
+      <li><span>Must it survive this device?</span><b>server</b></li>
+      <li><span>Is it something a browser physically cannot do?</span><b>server</b></li>
+      <li><span>None of the above?</span><b class="rule__client">client</b></li>
+    </ol>
+    <div class="prose">
+      <p>Prefer the client when you can, because it is faster and costs you nothing. Most real applications answer yes to at least one of the first five, which is why most real applications have a server.</p>
+      <p>And this one? It answers <em>no</em> to all five. No secrets, nothing shared, nothing at stake if you lie about your own arithmetic, nothing worth surviving the device, and nothing a browser could not compute. The Python half is here because the project is a Python project — which is an entirely good reason for something you are building to learn, and not one you could give a client.</p>
+    </div>
+
+    <div class="note"><b>The frame worth keeping:</b> the server is not where the work happens. It is where the <em>truth</em> lives. The client is a fast, convenient, completely untrustworthy view of that truth. Which is also why "serverless" is a misleading name — the server is still there; you are renting it by the request instead of running it yourself.</div>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section class="section" id="s9">
+  <div class="rail"><span>09</span></div>
+  <div>
+    <h2 class="head">Vocabulary</h2>
+    <p class="standfirst">The words that appear in every codebase, not just this one</p>
+    <dl class="glossary">
+      <div><dt>API</dt><dd>The set of requests a program agrees to answer. Here: <code>POST /api/calc</code> and <code>GET /api/fact</code>.</dd></div>
+      <div><dt>Argument</dt><dd>A value you hand to a function when calling it. The named slots it arrives in are <em>parameters</em>.</dd></div>
+      <div><dt>Array / list</dt><dd>An ordered collection. <code>[1, 2, 3]</code>. Called a list in Python.</dd></div>
+      <div><dt>AST</dt><dd>Abstract syntax tree — source text rearranged into a structure that makes its meaning explicit.</dd></div>
+      <div><dt>Async</dt><dd>Work that starts now and finishes later without blocking everything else.</dd></div>
+      <div><dt>CDN</dt><dd>Content delivery network. A public host for common files; this project loads React from one instead of installing it.</dd></div>
+      <div><dt>Client / server</dt><dd>The one that asks, and the one that waits and answers.</dd></div>
+      <div><dt>Component</dt><dd>In React, a function returning a piece of interface.</dd></div>
+      <div><dt>Dependency</dt><dd>Someone else's code your project needs. This one has two.</dd></div>
+      <div><dt>Dictionary / object</dt><dd>A collection of named values. <code>{"pi": 3.14159}</code>.</dd></div>
+      <div><dt>Endpoint</dt><dd>One specific path a server answers on.</dd></div>
+      <div><dt>Framework</dt><dd>A library that supplies the shape of a program, not just tools for it. Express is one.</dd></div>
+      <div><dt>Hook</dt><dd>A React function starting with <code>use</code> that gives a component memory or side effects.</dd></div>
+      <div><dt>HTTP</dt><dd>The request-and-answer format the web runs on.</dd></div>
+      <div><dt>JSON</dt><dd>A text format for values that every language can read and write.</dd></div>
+      <div><dt>Parse</dt><dd>Read text and build a structure from it.</dd></div>
+      <div><dt>Port</dt><dd>A numbered door on a machine, so several servers can share one address.</dd></div>
+      <div><dt>Props</dt><dd>Values passed from a parent component into a child. Read-only, one direction.</dd></div>
+      <div><dt>Recursion</dt><dd>A function calling itself on a smaller version of the problem.</dd></div>
+      <div><dt>Regular expression</dt><dd>A compact pattern for finding or replacing text.</dd></div>
+      <div><dt>State</dt><dd>The facts a component remembers between renders; changing it redraws the screen.</dd></div>
+      <div><dt>Stateless</dt><dd>Keeping nothing between requests. Each one carries everything needed to answer it.</dd></div>
+      <div><dt>String</dt><dd>Text. <code>"7*8"</code> is a string; <code>56</code> is a number.</dd></div>
+      <div><dt>Whitelist</dt><dd>Naming what is allowed and refusing everything else — the safe direction.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<!-- ============ 09 ============ -->
+<section class="section" id="s10">
+  <div class="rail"><span>10</span></div>
+  <div>
+    <h2 class="head">Five things to try</h2>
+    <p class="standfirst">Reading code teaches less than poking it</p>
+    <ol class="try">
+      <li>
+        <div>
+          <h3>Talk to the server without the browser</h3>
+          <p>This is the same request the calculator makes when you press <kbd>=</kbd>. If it works here, the Python half is fine and any bug is in the frontend — which is how you narrow down a problem.</p>
+          <div class="snippet"><pre><code class="language-bash">curl -X POST http://127.0.0.1:8000/api/calc \
+  -H 'Content-Type: application/json' \
+  -d '{"expression": "2 + 3 * 4"}'</code></pre></div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Watch the whitelist refuse something</h3>
+          <p>Send an expression that would be catastrophic under <code>eval</code>. You get a polite <code>400</code> instead, because the walker never allowed it.</p>
+          <div class="snippet"><pre><code class="language-bash">curl -X POST http://127.0.0.1:8000/api/calc \
+  -H 'Content-Type: application/json' \
+  -d '{"expression": "__import__(\"os\")"}'
+# {"error": "Unknown function"}</code></pre></div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Add a key to the keypad</h3>
+          <p>Add one object to <code>STANDARD_KEYS</code> in <code>static/app.jsx</code> and refresh. No build, no restart — Babel recompiles in the browser. Then find where that key is <em>drawn</em>, and notice you never had to touch it.</p>
+          <div class="snippet"><pre><code class="language-javascript">{ label: "τ", type: "fn", insert: "tau", aria: "Tau" },</code></pre></div>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Break the connection on purpose</h3>
+          <p>Stop the Node service and refresh the page. The calculator keeps working; only the facts bubble changes, to the message written for exactly this case at <code>app.jsx</code> line 613. That is what "handles failure" looks like in practice.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Watch the traffic</h3>
+          <p>Open your browser's developer tools (F12), choose the Network tab, and press <kbd>=</kbd>. You will see the request, its JSON body, the status code, and the reply — the whole of Figure 2, live.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="note"><b>Where to go next.</b> The single highest-value habit is reading a file top to bottom before changing anything in it. <code>server.py</code> is 451 lines and rewards that completely; every constant near the top exists because of a decision explained in a comment beside it.</div>
+  </div>
+</section>
+
+<footer class="end">
+  <span>server.py 451 · app.jsx 988 · styles.css 1079 · facts-server.js 53 · index.html 41</span>
+  <span>Branch 3d-toggle</span>
+</footer>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  if (window.hljs) {
+    document.querySelectorAll(".snippet code").forEach(function (el) {
+      try { hljs.highlightElement(el); } catch (e) {}
+    });
+  }
+</script>
+</body>
+</html>
